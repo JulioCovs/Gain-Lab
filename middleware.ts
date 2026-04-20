@@ -11,22 +11,23 @@ function decodeBase64Url(value: string): string {
 
 function extractTokenFromCookie(rawCookieValue: string | undefined): string | null {
   if (!rawCookieValue) return null
+  const decodedCookieValue = decodeURIComponent(rawCookieValue)
 
   // Some setups store the raw access token directly.
-  if (rawCookieValue.split(".").length === 3) return rawCookieValue
+  if (decodedCookieValue.split(".").length === 3) return decodedCookieValue
 
   // Some setups store JSON with access_token.
   try {
-    const parsed = JSON.parse(rawCookieValue) as { access_token?: string }
+    const parsed = JSON.parse(decodedCookieValue) as { access_token?: string }
     if (parsed.access_token) return parsed.access_token
   } catch {
     // Ignore, we try other formats below.
   }
 
   // Supabase SSR can store cookie as base64-encoded JSON.
-  if (rawCookieValue.startsWith("base64-")) {
+  if (decodedCookieValue.startsWith("base64-")) {
     try {
-      const decoded = decodeBase64Url(rawCookieValue.replace("base64-", ""))
+      const decoded = decodeBase64Url(decodedCookieValue.replace("base64-", ""))
       const parsed = JSON.parse(decoded) as { access_token?: string }
       if (parsed.access_token) return parsed.access_token
     } catch {
@@ -77,20 +78,15 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/", request.url))
   }
 
-  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    global: {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    },
-  })
+  const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
   const {
     data: { user },
     error,
-  } = await supabase.auth.getUser()
+  } = await supabase.auth.getUser(accessToken)
 
   if (error || !user) {
+    console.log("No se pudo validar usuario en middleware:", error?.message)
     return NextResponse.redirect(new URL("/", request.url))
   }
 

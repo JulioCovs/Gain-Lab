@@ -1,27 +1,25 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { FormEvent, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import {
   ArrowLeft,
+  Boxes,
+  DollarSign,
+  Loader2,
   Package,
-  AlertTriangle,
-  TrendingUp,
-  Search,
-  Filter,
-  Mail,
+  Plus,
+  ShieldAlert,
+  ShoppingBag,
+  Trash2,
+  UserPlus,
   RefreshCw,
+  Pencil,
 } from "lucide-react"
+import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import {
   Table,
   TableBody,
@@ -32,318 +30,488 @@ import {
 } from "@/components/ui/table"
 import {
   Dialog,
+  DialogClose,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { products, type Category } from "@/lib/store-data"
-
-// Short category names for admin
-const adminCategories = [
-  { id: "rendimiento" as Category, name: "Rendimiento" },
-  { id: "recuperacion" as Category, name: "Recuperación" },
-  { id: "bienestar" as Category, name: "Bienestar" },
-  { id: "adaptogenos" as Category, name: "Adaptógenos" },
-]
-import { StockAlertCard } from "./stock-alert-card"
 import { StatsCard } from "./stats-card"
 
 const LOW_STOCK_THRESHOLD = 10
+const ADMIN_EMAILS = new Set(["juliocov@icloud.com", "juancajurs@gmail.com"])
+
+interface AdminProduct {
+  id: string
+  name: string
+  category: string
+  price: number
+  stock: number
+  image: string | null
+}
+
+interface AdminOrder {
+  id: string
+  createdAt: string
+  status: "procesando" | "en-camino" | "entregado"
+  total: number
+}
+
+interface ProductFormState {
+  id: string
+  name: string
+  category: string
+  price: string
+  stock: string
+  image: string
+}
+
+const initialProductForm: ProductFormState = {
+  id: "",
+  name: "",
+  category: "",
+  price: "",
+  stock: "",
+  image: "",
+}
 
 export function AdminDashboard() {
-  const [searchQuery, setSearchQuery] = useState("")
-  const [categoryFilter, setCategoryFilter] = useState<Category | "all">("all")
-  const [stockFilter, setStockFilter] = useState<"all" | "low" | "normal">("all")
-  const [selectedProduct, setSelectedProduct] = useState<string | null>(null)
+  const [isCheckingAccess, setIsCheckingAccess] = useState(true)
+  const [isAuthorized, setIsAuthorized] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [products, setProducts] = useState<AdminProduct[]>([])
+  const [orders, setOrders] = useState<AdminOrder[]>([])
+  const [newClients, setNewClients] = useState(0)
+  const [form, setForm] = useState<ProductFormState>(initialProductForm)
+  const [editingId, setEditingId] = useState<string | null>(null)
 
-  // Filter out bundles for inventory management
-  const inventoryProducts = products.filter((p) => !p.isBundle)
+  const lowStockCount = products.filter((product) => product.stock < LOW_STOCK_THRESHOLD).length
+  const totalSales = orders.reduce((sum, order) => sum + order.total, 0)
 
-  const filteredProducts = useMemo(() => {
-    return inventoryProducts.filter((product) => {
-      const matchesSearch =
-        product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        product.id.toLowerCase().includes(searchQuery.toLowerCase())
+  const loadDashboardData = async () => {
+    setLoading(true)
 
-      const matchesCategory =
-        categoryFilter === "all" || product.category === categoryFilter
+    const [productsResult, ordersResult, clientsResult] = await Promise.all([
+      supabase.from("products").select("id, name, category, price, stock, image"),
+      supabase
+        .from("orders")
+        .select("id, created_at, status, total_amount")
+        .order("created_at", { ascending: false })
+        .limit(10),
+      supabase
+        .from("profiles")
+        .select("id", { count: "exact", head: true })
+        .gte("created_at", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()),
+    ])
 
-      const matchesStock =
-        stockFilter === "all" ||
-        (stockFilter === "low" && product.stock < LOW_STOCK_THRESHOLD) ||
-        (stockFilter === "normal" && product.stock >= LOW_STOCK_THRESHOLD)
+    if (productsResult.error) {
+      console.warn("No se pudieron obtener productos:", productsResult.error.message)
+      setProducts([])
+    } else {
+      const mappedProducts = (productsResult.data ?? []).map((item) => {
+        const row = item as Record<string, unknown>
+        return {
+          id: String(row.id ?? ""),
+          name: String(row.name ?? ""),
+          category: String(row.category ?? ""),
+          price: Number(row.price ?? 0),
+          stock: Number(row.stock ?? 0),
+          image: row.image ? String(row.image) : null,
+        }
+      })
+      setProducts(mappedProducts)
+    }
 
-      return matchesSearch && matchesCategory && matchesStock
+    if (ordersResult.error) {
+      console.warn("No se pudieron obtener pedidos:", ordersResult.error.message)
+      setOrders([])
+    } else {
+      const mappedOrders = (ordersResult.data ?? []).map((item) => {
+        const row = item as Record<string, unknown>
+        const rawStatus = String(row.status ?? "procesando")
+        const normalizedStatus =
+          rawStatus === "entregado" || rawStatus === "en-camino" ? rawStatus : "procesando"
+
+        return {
+          id: String(row.id ?? ""),
+          createdAt: String(row.created_at ?? ""),
+          status: normalizedStatus,
+          total: Number(row.total_amount ?? 0),
+        } as AdminOrder
+      })
+      setOrders(mappedOrders)
+    }
+
+    if (clientsResult.error) {
+      console.warn("No se pudieron obtener clientes nuevos:", clientsResult.error.message)
+      setNewClients(0)
+    } else {
+      setNewClients(clientsResult.count ?? 0)
+    }
+
+    setLoading(false)
+  }
+
+  const resetForm = () => {
+    setForm(initialProductForm)
+    setEditingId(null)
+  }
+
+  useEffect(() => {
+    const checkAccessAndLoad = async () => {
+      setIsCheckingAccess(true)
+      const {
+        data: { user },
+        error,
+      } = await supabase.auth.getUser()
+
+      const email = user?.email?.toLowerCase()
+      if (error || !email || !ADMIN_EMAILS.has(email)) {
+        setIsAuthorized(false)
+        setIsCheckingAccess(false)
+        return
+      }
+
+      setIsAuthorized(true)
+      setIsCheckingAccess(false)
+      await loadDashboardData()
+    }
+
+    checkAccessAndLoad()
+  }, [])
+
+  const handleProductSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+
+    const payload = {
+      id: form.id.trim(),
+      name: form.name.trim(),
+      category: form.category.trim(),
+      price: Number(form.price),
+      stock: Number(form.stock),
+      image: form.image.trim() || null,
+    }
+
+    if (!payload.id || !payload.name || !payload.category) return
+
+    const { error } = await supabase.from("products").upsert(payload, { onConflict: "id" })
+    if (error) {
+      console.warn("No se pudo guardar el producto:", error.message)
+      return
+    }
+
+    await loadDashboardData()
+    resetForm()
+  }
+
+  const handleEditProduct = (product: AdminProduct) => {
+    setEditingId(product.id)
+    setForm({
+      id: product.id,
+      name: product.name,
+      category: product.category,
+      price: String(product.price),
+      stock: String(product.stock),
+      image: product.image ?? "",
     })
-  }, [inventoryProducts, searchQuery, categoryFilter, stockFilter])
+  }
 
-  const lowStockProducts = inventoryProducts.filter(
-    (p) => p.stock < LOW_STOCK_THRESHOLD
-  )
-  const criticalStockProducts = inventoryProducts.filter((p) => p.stock < 5)
-  const totalStock = inventoryProducts.reduce((sum, p) => sum + p.stock, 0)
-  const totalValue = inventoryProducts.reduce(
-    (sum, p) => sum + p.stock * p.price,
-    0
-  )
+  const handleDeleteProduct = async (id: string) => {
+    const { error } = await supabase.from("products").delete().eq("id", id)
+    if (error) {
+      console.warn("No se pudo eliminar el producto:", error.message)
+      return
+    }
+    await loadDashboardData()
+  }
 
-  const getStockStatus = (stock: number) => {
-    if (stock === 0) return { label: "Sin stock", color: "bg-destructive" }
-    if (stock < 5) return { label: "Crítico", color: "bg-destructive" }
-    if (stock < LOW_STOCK_THRESHOLD) return { label: "Bajo", color: "bg-warning" }
-    return { label: "Normal", color: "bg-success" }
+  const handleChangeOrderStatus = async (orderId: string, currentStatus: AdminOrder["status"]) => {
+    const nextStatus =
+      currentStatus === "procesando"
+        ? "en-camino"
+        : currentStatus === "en-camino"
+          ? "entregado"
+          : "procesando"
+
+    const { error } = await supabase.from("orders").update({ status: nextStatus }).eq("id", orderId)
+    if (error) {
+      console.warn("No se pudo actualizar el estado del pedido:", error.message)
+      return
+    }
+
+    setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status: nextStatus } : o)))
+  }
+
+  const statusBadgeClass = (status: AdminOrder["status"]) => {
+    if (status === "entregado") return "bg-emerald-100 text-emerald-700"
+    if (status === "en-camino") return "bg-blue-100 text-blue-700"
+    return "bg-yellow-100 text-yellow-800"
+  }
+
+  const filteredProducts = useMemo(() => products.filter((product) => !product.id.includes("bundle")), [products])
+
+  if (isCheckingAccess) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#F5F5F7]">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Verificando acceso...
+        </div>
+      </div>
+    )
+  }
+
+  if (!isAuthorized) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#F5F5F7] p-4">
+        <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 text-center shadow-sm">
+          <ShieldAlert className="mx-auto h-8 w-8 text-red-600" />
+          <h1 className="mt-3 text-xl font-semibold">Acceso Denegado</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            No tienes permisos para acceder al Dashboard de Administración.
+          </p>
+          <Link href="/" className="mt-4 inline-block">
+            <Button>Volver al inicio</Button>
+          </Link>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur">
+    <div className="min-h-screen bg-[#F5F5F7]">
+      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 lg:px-8">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <Link href="/">
               <Button variant="ghost" size="icon">
                 <ArrowLeft className="h-5 w-5" />
               </Button>
             </Link>
             <div>
-              <h1 className="text-lg font-bold">Admin Dashboard</h1>
-              <p className="text-xs text-muted-foreground">Gestión de inventario</p>
+              <h1 className="text-lg font-bold text-slate-900">Dashboard de Administración</h1>
+              <p className="text-xs text-slate-500">GainLab</p>
             </div>
           </div>
-          <Button variant="outline" size="sm" className="gap-2">
+          <Button variant="outline" size="sm" className="gap-2" onClick={loadDashboardData}>
             <RefreshCw className="h-4 w-4" />
             Actualizar
           </Button>
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 py-8 lg:px-8">
-        {/* Stats Grid */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatsCard
-            title="Total Productos"
-            value={inventoryProducts.length.toString()}
-            icon={Package}
-            description="En catálogo"
-          />
-          <StatsCard
-            title="Stock Total"
-            value={totalStock.toLocaleString()}
-            icon={TrendingUp}
-            description="Unidades"
-          />
-          <StatsCard
-            title="Valor Inventario"
-            value={`$${totalValue.toLocaleString()} MXN`}
-            icon={TrendingUp}
-            description="Precio venta"
-          />
-          <StatsCard
-            title="Alertas Stock"
-            value={lowStockProducts.length.toString()}
-            icon={AlertTriangle}
-            description={`${criticalStockProducts.length} críticos`}
-            variant={lowStockProducts.length > 0 ? "warning" : "default"}
-          />
-        </div>
+      <div className="mx-auto grid max-w-7xl gap-6 px-4 py-6 lg:grid-cols-[220px_1fr] lg:px-8">
+        <aside className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Navegación</p>
+          <nav className="space-y-2">
+            <a href="#resumen" className="block rounded-md px-3 py-2 text-sm hover:bg-slate-100">Resumen</a>
+            <a href="#inventario" className="block rounded-md px-3 py-2 text-sm hover:bg-slate-100">Inventario</a>
+            <a href="#pedidos" className="block rounded-md px-3 py-2 text-sm hover:bg-slate-100">Pedidos</a>
+            <a href="#clientes" className="block rounded-md px-3 py-2 text-sm hover:bg-slate-100">Clientes</a>
+          </nav>
+        </aside>
 
-        {/* Low Stock Alerts */}
-        {lowStockProducts.length > 0 && (
-          <section className="mt-8">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-foreground">
-                Alertas de Reabastecimiento
-              </h2>
-              <Badge variant="outline" className="border-destructive text-destructive">
-                {lowStockProducts.length} productos
-              </Badge>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {lowStockProducts.map((product) => (
-                <StockAlertCard key={product.id} product={product} />
-              ))}
-            </div>
+        <main className="space-y-6">
+          <section id="resumen" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <StatsCard
+              title="Ventas Totales"
+              value={`$${totalSales.toLocaleString()} MXN`}
+              icon={DollarSign}
+              description="Suma de pedidos"
+            />
+            <StatsCard
+              title="Número de Pedidos"
+              value={orders.length.toString()}
+              icon={ShoppingBag}
+              description="Últimos registros"
+            />
+            <StatsCard
+              title="Clientes Nuevos"
+              value={newClients.toString()}
+              icon={UserPlus}
+              description="Últimos 30 días"
+            />
+            <StatsCard
+              title="Stock Bajo"
+              value={lowStockCount.toString()}
+              icon={Boxes}
+              description="Productos por debajo de 10"
+              variant={lowStockCount > 0 ? "warning" : "default"}
+            />
           </section>
-        )}
 
-        {/* Inventory Table */}
-        <section className="mt-8">
-          <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="text-lg font-semibold text-foreground">
-              Inventario Completo
-            </h2>
-            <div className="flex flex-wrap gap-2">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar producto..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 sm:w-64"
-                />
-              </div>
-              <Select
-                value={categoryFilter}
-                onValueChange={(v) => setCategoryFilter(v as Category | "all")}
-              >
-                <SelectTrigger className="w-40">
-                  <SelectValue placeholder="Categoría" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas</SelectItem>
-                  {adminCategories.map((cat) => (
-                    <SelectItem key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select
-                value={stockFilter}
-                onValueChange={(v) => setStockFilter(v as "all" | "low" | "normal")}
-              >
-                <SelectTrigger className="w-32">
-                  <SelectValue placeholder="Stock" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todo</SelectItem>
-                  <SelectItem value="low">Stock bajo</SelectItem>
-                  <SelectItem value="normal">Stock normal</SelectItem>
-                </SelectContent>
-              </Select>
+          <section id="inventario" className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Gestión de Inventario</h2>
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button className="gap-2" onClick={resetForm}>
+                    <Plus className="h-4 w-4" />
+                    Agregar Nuevo Producto
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>{editingId ? "Editar Producto" : "Nuevo Producto"}</DialogTitle>
+                  </DialogHeader>
+                  <form className="space-y-3" onSubmit={handleProductSubmit}>
+                    <Input
+                      placeholder="ID/SKU"
+                      value={form.id}
+                      onChange={(e) => setForm((prev) => ({ ...prev, id: e.target.value }))}
+                      disabled={Boolean(editingId)}
+                      required
+                    />
+                    <Input
+                      placeholder="Nombre"
+                      value={form.name}
+                      onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+                      required
+                    />
+                    <Input
+                      placeholder="Categoría"
+                      value={form.category}
+                      onChange={(e) => setForm((prev) => ({ ...prev, category: e.target.value }))}
+                      required
+                    />
+                    <div className="grid grid-cols-2 gap-3">
+                      <Input
+                        type="number"
+                        placeholder="Precio"
+                        value={form.price}
+                        onChange={(e) => setForm((prev) => ({ ...prev, price: e.target.value }))}
+                        required
+                      />
+                      <Input
+                        type="number"
+                        placeholder="Stock"
+                        value={form.stock}
+                        onChange={(e) => setForm((prev) => ({ ...prev, stock: e.target.value }))}
+                        required
+                      />
+                    </div>
+                    <Input
+                      placeholder="URL de foto"
+                      value={form.image}
+                      onChange={(e) => setForm((prev) => ({ ...prev, image: e.target.value }))}
+                    />
+                    <DialogFooter>
+                      <DialogClose asChild>
+                        <Button type="button" variant="outline">
+                          Cancelar
+                        </Button>
+                      </DialogClose>
+                      <Button type="submit">{editingId ? "Guardar Cambios" : "Crear Producto"}</Button>
+                    </DialogFooter>
+                  </form>
+                </DialogContent>
+              </Dialog>
             </div>
-          </div>
 
-          <div className="rounded-lg border border-border bg-card">
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead>Producto</TableHead>
-                  <TableHead className="hidden sm:table-cell">Categoría</TableHead>
-                  <TableHead className="text-center">Stock</TableHead>
-                  <TableHead className="hidden sm:table-cell">Estado</TableHead>
-                  <TableHead className="text-right">Precio</TableHead>
-                  <TableHead className="text-right">Valor</TableHead>
-                  <TableHead className="text-center">Acción</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredProducts.map((product) => {
-                  const status = getStockStatus(product.stock)
-                  const isLowStock = product.stock < LOW_STOCK_THRESHOLD
-
-                  return (
-                    <TableRow
-                      key={product.id}
-                      className={isLowStock ? "bg-destructive/5" : ""}
-                    >
-                      <TableCell>
-                        <div>
-                          <p className="font-medium text-foreground">
-                            {product.name}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {product.id}
-                          </p>
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden sm:table-cell">
-                        <Badge variant="outline">
-                          {adminCategories.find((c) => c.id === product.category)?.name}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <span
-                          className={`font-mono font-semibold ${
-                            isLowStock ? "text-destructive" : "text-foreground"
-                          }`}
-                        >
-                          {product.stock}
-                        </span>
-                      </TableCell>
-                      <TableCell className="hidden sm:table-cell">
-                        <Badge
-                          className={`${status.color} text-${status.color === "bg-success" ? "success" : status.color === "bg-warning" ? "warning" : "destructive"}-foreground`}
-                          variant="secondary"
-                        >
-                          {status.label}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right font-mono">
-                        ${product.price.toLocaleString()} MXN
-                      </TableCell>
-                      <TableCell className="text-right font-mono">
-                        ${(product.stock * product.price).toLocaleString()} MXN
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Dialog>
-                          <DialogTrigger asChild>
-                            <Button
-                              variant={isLowStock ? "destructive" : "outline"}
-                              size="sm"
-                              onClick={() => setSelectedProduct(product.id)}
-                            >
-                              <Mail className="mr-1 h-3 w-3" />
-                              {isLowStock ? "Reabastecer" : "Contactar"}
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent>
-                            <DialogHeader>
-                              <DialogTitle>Contactar Proveedor</DialogTitle>
-                              <DialogDescription>
-                                Enviar solicitud de reabastecimiento para {product.name}
-                              </DialogDescription>
-                            </DialogHeader>
-                            <div className="py-4">
-                              <div className="rounded-lg bg-muted p-4">
-                                <p className="text-sm">
-                                  <strong>Producto:</strong> {product.name}
-                                </p>
-                                <p className="text-sm">
-                                  <strong>SKU:</strong> {product.id}
-                                </p>
-                                <p className="text-sm">
-                                  <strong>Stock actual:</strong>{" "}
-                                  <span
-                                    className={
-                                      isLowStock ? "text-destructive" : ""
-                                    }
-                                  >
-                                    {product.stock} unidades
-                                  </span>
-                                </p>
-                                <p className="text-sm">
-                                  <strong>Cantidad sugerida:</strong> 100 unidades
-                                </p>
-                              </div>
-                            </div>
-                            <DialogFooter>
-                              <Button variant="outline">Cancelar</Button>
-                              <Button>Enviar solicitud</Button>
-                            </DialogFooter>
-                          </DialogContent>
-                        </Dialog>
-                      </TableCell>
+            {loading ? (
+              <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Cargando inventario...
+              </div>
+            ) : (
+              <div className="rounded-lg border border-slate-200">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Foto</TableHead>
+                      <TableHead>Nombre</TableHead>
+                      <TableHead>Categoría</TableHead>
+                      <TableHead className="text-right">Precio</TableHead>
+                      <TableHead className="text-right">Stock</TableHead>
+                      <TableHead className="text-right">Acciones</TableHead>
                     </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-
-            {filteredProducts.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-12">
-                <Filter className="h-12 w-12 text-muted-foreground/50" />
-                <p className="mt-4 text-muted-foreground">
-                  No se encontraron productos
-                </p>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredProducts.map((product) => (
+                      <TableRow key={product.id}>
+                        <TableCell>
+                          {product.image ? (
+                            <img src={product.image} alt={product.name} className="h-10 w-10 rounded-md object-cover" />
+                          ) : (
+                            <div className="h-10 w-10 rounded-md bg-slate-100" />
+                          )}
+                        </TableCell>
+                        <TableCell className="font-medium">{product.name}</TableCell>
+                        <TableCell>{product.category}</TableCell>
+                        <TableCell className="text-right">${product.price.toLocaleString()} MXN</TableCell>
+                        <TableCell className={`text-right ${product.stock < LOW_STOCK_THRESHOLD ? "text-red-600" : ""}`}>
+                          {product.stock}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button variant="outline" size="sm" onClick={() => handleEditProduct(product)}>
+                              <Pencil className="mr-1 h-3 w-3" />
+                              Editar
+                            </Button>
+                            <Button variant="destructive" size="sm" onClick={() => handleDeleteProduct(product.id)}>
+                              <Trash2 className="mr-1 h-3 w-3" />
+                              Eliminar
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
             )}
-          </div>
-        </section>
-      </main>
+          </section>
+
+          <section id="pedidos" className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <h2 className="mb-4 text-lg font-semibold">Gestión de Pedidos</h2>
+            {loading ? (
+              <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Cargando pedidos...
+              </div>
+            ) : orders.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No hay pedidos disponibles.</p>
+            ) : (
+              <div className="space-y-3">
+                {orders.map((order) => (
+                  <div key={order.id} className="rounded-lg border border-slate-200 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="font-medium">{order.id}</p>
+                        <p className="text-xs text-slate-500">
+                          {new Date(order.createdAt).toLocaleDateString("es-MX")} - ${order.total.toLocaleString()} MXN
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge className={statusBadgeClass(order.status)}>
+                          {order.status === "en-camino"
+                            ? "En camino"
+                            : order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                        </Badge>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleChangeOrderStatus(order.id, order.status)}
+                        >
+                          Cambiar estado
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section id="clientes" className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <h2 className="text-lg font-semibold">Clientes</h2>
+            <p className="mt-2 text-sm text-slate-600">
+              Clientes nuevos en los últimos 30 días: <strong>{newClients}</strong>
+            </p>
+          </section>
+        </main>
+      </div>
     </div>
   )
 }
