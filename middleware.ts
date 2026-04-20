@@ -75,7 +75,7 @@ export async function middleware(request: NextRequest) {
 
   const accessToken = readSupabaseAccessToken(request)
   if (!accessToken) {
-    return NextResponse.redirect(new URL("/", request.url))
+    return NextResponse.next()
   }
 
   const supabase = createClient(supabaseUrl, supabaseAnonKey)
@@ -87,14 +87,14 @@ export async function middleware(request: NextRequest) {
 
   if (error || !user) {
     console.log("No se pudo validar usuario en middleware:", error?.message)
-    return NextResponse.redirect(new URL("/", request.url))
+    return NextResponse.next()
   }
 
   console.log("Correo del usuario intentando entrar:", user.email)
 
   const normalizedEmail = user.email?.toLowerCase()
   if (!normalizedEmail || !ALLOWED_EMAILS.has(normalizedEmail)) {
-    return NextResponse.redirect(new URL("/", request.url))
+    return NextResponse.next()
   }
 
   return NextResponse.next()
