@@ -83,7 +83,14 @@ export default function PerfilPage() {
       } = await supabase.auth.getUser()
 
       if (userError || !user) {
-        console.error("No hay sesión activa:", userError?.message)
+        const message = userError?.message ?? ""
+        if (message.includes("Invalid Refresh Token") || message.includes("Refresh Token Not Found")) {
+          try {
+            await supabase.auth.signOut()
+          } catch {
+            // ignore
+          }
+        }
         router.push("/auth")
         return
       }

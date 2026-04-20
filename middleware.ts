@@ -66,6 +66,14 @@ function readSupabaseAccessToken(request: NextRequest): string | null {
 }
 
 export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl
+
+  // Excepciones: el middleware NO debe ejecutarse en login/auth
+  // para evitar bucles de redirección durante el inicio de sesión.
+  if (pathname === "/login" || pathname.startsWith("/auth")) {
+    return NextResponse.next()
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 

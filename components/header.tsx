@@ -48,7 +48,18 @@ export function Header() {
     const loadUser = async () => {
       const {
         data: { user },
+        error,
       } = await supabase.auth.getUser()
+      if (error) {
+        const message = error.message ?? ""
+        if (message.includes("Invalid Refresh Token") || message.includes("Refresh Token Not Found")) {
+          try {
+            await supabase.auth.signOut()
+          } catch {
+            // ignore
+          }
+        }
+      }
       setUser(user)
 
       if (user) {

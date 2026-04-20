@@ -18,7 +18,20 @@ export default function AdminPage() {
 
       const {
         data: { user },
+        error,
       } = await supabase.auth.getUser()
+
+      if (error) {
+        const message = error.message ?? ""
+        if (message.includes("Invalid Refresh Token") || message.includes("Refresh Token Not Found")) {
+          // Session storage is corrupt/missing refresh token; clear it and continue as logged out.
+          try {
+            await supabase.auth.signOut()
+          } catch {
+            // ignore
+          }
+        }
+      }
 
       const email = user?.email?.toLowerCase() ?? "sin-correo"
       setDetectedEmail(email)

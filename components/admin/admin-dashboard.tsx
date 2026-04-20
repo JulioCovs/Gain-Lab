@@ -46,15 +46,14 @@ import { StatsCard } from "./stats-card"
 
 const LOW_STOCK_THRESHOLD = 10
 
-const PRODUCT_CATEGORIES = ["Rendimiento", "Recuperación", "Bienestar", "Adaptógenos"] as const
-
 interface AdminProduct {
   id: string
   name: string
-  category: string
+  description: string | null
+  categoryId: string | null
   price: number
   stock: number
-  image: string | null
+  imageUrl: string | null
 }
 
 interface AdminOrder {
@@ -72,39 +71,52 @@ interface AdminClient {
   createdAt: string
 }
 
+interface AdminCategory {
+  id: string
+  name: string
+}
+
 interface ProductFormState {
   id: string
   name: string
-  category: string
+  description: string
+  categoryId: string
   price: string
   stock: string
-  image: string
+  imageUrl: string
 }
 
 const initialProductForm: ProductFormState = {
   id: "",
   name: "",
-  category: "",
+  description: "",
+  categoryId: "",
   price: "",
   stock: "",
-  image: "",
+  imageUrl: "",
 }
 
 type AdminTab = "resumen" | "inventario" | "pedidos" | "clientes"
 
 export function AdminDashboard() {
   const [loading, setLoading] = useState(true)
+  const [categoriesLoading, setCategoriesLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<AdminTab>("resumen")
   const [products, setProducts] = useState<AdminProduct[]>([])
   const [orders, setOrders] = useState<AdminOrder[]>([])
   const [newClients, setNewClients] = useState(0)
   const [clients, setClients] = useState<AdminClient[]>([])
+  const [categories, setCategories] = useState<AdminCategory[]>([])
   const [form, setForm] = useState<ProductFormState>(initialProductForm)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [productDialogOpen, setProductDialogOpen] = useState(false)
   const [savingProduct, setSavingProduct] = useState(false)
   const [uploadingImage, setUploadingImage] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+
+  const categoriesById = useMemo(() => {
+    return new Map(categories.map((c) => [c.id, c.name]))
+  }, [categories])
 
   const lowStockCount = products.filter((product) => product.stock < LOW_STOCK_THRESHOLD).length
   const totalSales = orders.reduce((sum, order) => sum + order.total, 0)
@@ -116,43 +128,40 @@ export function AdminDashboard() {
     const safeName = file.name.replace(/[^\w.\-]+/g, "-").toLowerCase()
     const filePath = `products/${Date.now()}-${safeName}`
 
-    const candidateBuckets = ["product-images", "products", "images"] as const
-    let lastError: string | null = null
+    const bucket = "productos"
+    const { error } = await supabase.storage.from(bucket).upload(filePath, file, {
+      cacheControl: "3600",
+      upsert: true,
+      contentType: file.type || undefined,
+    })
 
-    for (const bucket of candidateBuckets) {
-      const { error } = await supabase.storage.from(bucket).upload(filePath, file, {
-        cacheControl: "3600",
-        upsert: true,
-        contentType: file.type || undefined,
-      })
-
-      if (error) {
-        lastError = error.message
-        continue
-      }
-
-      const { data } = supabase.storage.from(bucket).getPublicUrl(filePath)
-      const publicUrl = data?.publicUrl ?? ""
-
-      if (!publicUrl) {
-        lastError = "No se pudo obtener URL pública de la imagen."
-        continue
-      }
-
-      setForm((prev) => ({ ...prev, image: publicUrl }))
+    if (error) {
       setUploadingImage(false)
+      setFormError(error.message)
       return
     }
 
+    const { data } = supabase.storage.from(bucket).getPublicUrl(filePath)
+    const publicUrl = data?.publicUrl ?? ""
+
+    if (!publicUrl) {
+      setUploadingImage(false)
+      setFormError("No se pudo obtener URL pública de la imagen.")
+      return
+    }
+
+    setForm((prev) => ({ ...prev, imageUrl: publicUrl }))
     setUploadingImage(false)
-    setFormError(lastError ?? "No se pudo subir la imagen. Puedes pegar una URL directa.")
   }
 
   const loadDashboardData = async () => {
     setLoading(true)
+    setCategoriesLoading(true)
 
-    const [productsResult, ordersResult, clientsCountResult, clientsListResult] = await Promise.all([
-      supabase.from("products").select("id, name, category, price, stock, image"),
+    const [categoriesResult, productsResult, ordersResult, clientsCountResult, clientsListResult] =
+      await Promise.all([
+        supabase.from("categories").select("id, name").order("name", { ascending: true }),
+        supabase.from("products").select("*"),
       supabase
         .from("orders")
         .select("id, created_at, status, total_amount")
@@ -167,7 +176,22 @@ export function AdminDashboard() {
         .select("id, first_name, last_name, phone, created_at")
         .order("created_at", { ascending: false })
         .limit(50),
-    ])
+      ])
+
+    if (categoriesResult.error) {
+      console.warn("No se pudieron obtener categorías:", categoriesResult.error.message)
+      setCategories([])
+    } else {
+      const mappedCategories = (categoriesResult.data ?? []).map((item) => {
+        const row = item as Record<string, unknown>
+        return {
+          id: String(row.id ?? ""),
+          name: String(row.name ?? ""),
+        } as AdminCategory
+      })
+      setCategories(mappedCategories)
+    }
+    setCategoriesLoading(false)
 
     if (productsResult.error) {
       console.warn("No se pudieron obtener productos:", productsResult.error.message)
@@ -175,13 +199,25 @@ export function AdminDashboard() {
     } else {
       const mappedProducts = (productsResult.data ?? []).map((item) => {
         const row = item as Record<string, unknown>
+
+        const rawCategoryId =
+          row.category_id ?? row.categoryId ?? row.category ?? row.categoria ?? row.categoria_id ?? null
+        const rawName = row.name ?? row.nombre ?? null
+        const rawPrice = row.price ?? row.precio ?? 0
+        const rawStock = row.stock ?? row.existencia ?? row.inventory ?? 0
+        const rawDescription = row.description ?? row.descripcion ?? null
+        const rawImageUrl =
+          row.image_url ?? row.imageUrl ?? row.image ?? row.imagen ?? row.photo_url ?? row.photoUrl ?? null
+        const categoryId = rawCategoryId ? String(rawCategoryId) : null
+
         return {
           id: String(row.id ?? ""),
-          name: String(row.name ?? ""),
-          category: String(row.category ?? ""),
-          price: Number(row.price ?? 0),
-          stock: Number(row.stock ?? 0),
-          image: row.image ? String(row.image) : null,
+          name: String(rawName ?? ""),
+          description: rawDescription ? String(rawDescription) : null,
+          categoryId,
+          price: Number(rawPrice ?? 0),
+          stock: Number(rawStock ?? 0),
+          imageUrl: rawImageUrl ? String(rawImageUrl) : null,
         }
       })
       setProducts(mappedProducts)
@@ -250,17 +286,17 @@ export function AdminDashboard() {
     setFormError(null)
 
     const payload = {
-      id: form.id.trim(),
       name: form.name.trim(),
-      category: form.category.trim(),
+      description: form.description.trim(),
+      categoryId: form.categoryId.trim(),
       price: Number(form.price),
       stock: Number(form.stock),
-      image: form.image.trim() || null,
+      imageUrl: form.imageUrl.trim() || null,
     }
 
-    if (!payload.id || !payload.name || !payload.category) {
+    if (!payload.name || !payload.categoryId) {
       setSavingProduct(false)
-      setFormError("Completa ID, nombre y categoría.")
+      setFormError("Completa nombre y categoría.")
       return
     }
 
@@ -270,18 +306,39 @@ export function AdminDashboard() {
       return
     }
 
-    const { error } = editingId
-      ? await supabase
-          .from("products")
-          .update({
-            name: payload.name,
-            category: payload.category,
-            price: payload.price,
-            stock: payload.stock,
-            image: payload.image,
-          })
-          .eq("id", editingId)
-      : await supabase.from("products").insert(payload)
+    const performInsertOrUpdate = async (columnSet: {
+      name: string
+      description: string
+      categoryId: string
+      price: number
+      stock: number
+      imageUrl: string | null
+    }) => {
+      const isEditing = Boolean(editingId)
+      const data: Record<string, unknown> = {
+        name: columnSet.name,
+        description: columnSet.description,
+        category_id: columnSet.categoryId,
+        price: columnSet.price,
+        stock: columnSet.stock,
+        image_url: columnSet.imageUrl,
+      }
+
+      return isEditing
+        ? await supabase.from("products").update(data).eq("id", editingId as string)
+        : await supabase.from("products").insert(data)
+    }
+
+    const result = await performInsertOrUpdate({
+      name: payload.name,
+      description: payload.description,
+      categoryId: payload.categoryId,
+      price: payload.price,
+      stock: payload.stock,
+      imageUrl: payload.imageUrl,
+    })
+
+    const error = result.error
 
     if (error) {
       console.warn("No se pudo guardar el producto:", error.message)
@@ -302,10 +359,11 @@ export function AdminDashboard() {
     setForm({
       id: product.id,
       name: product.name,
-      category: product.category,
+      description: product.description ?? "",
+      categoryId: product.categoryId ?? "",
       price: String(product.price),
       stock: String(product.stock),
-      image: product.image ?? "",
+      imageUrl: product.imageUrl ?? "",
     })
     setProductDialogOpen(true)
   }
@@ -468,33 +526,45 @@ export function AdminDashboard() {
                       <DialogTitle>{editingId ? "Editar Producto" : "Nuevo Producto"}</DialogTitle>
                     </DialogHeader>
                     <form className="space-y-3" onSubmit={handleProductSubmit}>
-                      <Input
-                        placeholder="ID/SKU"
-                        value={form.id}
-                        onChange={(e) => setForm((prev) => ({ ...prev, id: e.target.value }))}
-                        disabled={Boolean(editingId)}
-                        required
-                      />
+                      {editingId ? (
+                        <Input value={form.id} readOnly disabled aria-readonly placeholder="ID (autogenerado)" />
+                      ) : null}
+
                       <Input
                         placeholder="Nombre"
                         value={form.name}
                         onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
                         required
                       />
+                      <Input
+                        placeholder="Descripción"
+                        value={form.description}
+                        onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
+                      />
 
                       <Select
-                        value={form.category}
-                        onValueChange={(value) => setForm((prev) => ({ ...prev, category: value }))}
+                        value={form.categoryId}
+                        onValueChange={(value) => setForm((prev) => ({ ...prev, categoryId: value }))}
                       >
                         <SelectTrigger className="w-full">
                           <SelectValue placeholder="Categoría" />
                         </SelectTrigger>
                         <SelectContent>
-                          {PRODUCT_CATEGORIES.map((category) => (
-                            <SelectItem key={category} value={category}>
-                              {category}
+                          {categoriesLoading ? (
+                            <SelectItem value="__loading_categories__" disabled>
+                              Cargando categorías...
                             </SelectItem>
-                          ))}
+                          ) : categories.length === 0 ? (
+                            <SelectItem value="__no_categories__" disabled>
+                              No hay categorías disponibles
+                            </SelectItem>
+                          ) : (
+                            categories.map((category) => (
+                              <SelectItem key={category.id} value={category.id}>
+                                {category.name}
+                              </SelectItem>
+                            ))
+                          )}
                         </SelectContent>
                       </Select>
 
@@ -518,8 +588,8 @@ export function AdminDashboard() {
                       <div className="grid gap-2">
                         <Input
                           placeholder="URL de foto (opcional)"
-                          value={form.image}
-                          onChange={(e) => setForm((prev) => ({ ...prev, image: e.target.value }))}
+                          value={form.imageUrl}
+                          onChange={(e) => setForm((prev) => ({ ...prev, imageUrl: e.target.value }))}
                         />
                         <div className="flex items-center gap-2">
                           <input
@@ -543,7 +613,7 @@ export function AdminDashboard() {
                             {uploadingImage ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                             Subir Imagen
                           </Button>
-                          {form.image ? (
+                          {form.imageUrl ? (
                             <div className="flex items-center gap-2 text-xs text-slate-500">
                               <span className="truncate">Imagen lista</span>
                             </div>
@@ -600,9 +670,9 @@ export function AdminDashboard() {
                       {filteredProducts.map((product) => (
                         <TableRow key={product.id}>
                           <TableCell>
-                            {product.image ? (
+                            {product.imageUrl ? (
                               <img
-                                src={product.image}
+                                src={product.imageUrl}
                                 alt={product.name}
                                 className="h-10 w-10 rounded-md object-cover"
                               />
@@ -611,7 +681,9 @@ export function AdminDashboard() {
                             )}
                           </TableCell>
                           <TableCell className="font-medium">{product.name}</TableCell>
-                          <TableCell>{product.category}</TableCell>
+                          <TableCell>
+                            {product.categoryId ? categoriesById.get(product.categoryId) ?? product.categoryId : "-"}
+                          </TableCell>
                           <TableCell className="text-right">${product.price.toLocaleString()} MXN</TableCell>
                           <TableCell
                             className={`text-right ${product.stock < LOW_STOCK_THRESHOLD ? "text-red-600" : ""}`}
