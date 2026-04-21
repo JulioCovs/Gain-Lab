@@ -1,3 +1,4 @@
+import { Suspense } from "react" // 1. Importamos Suspense
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
@@ -29,29 +30,39 @@ const faqItems = [
   },
 ]
 
+// 2. Creamos un componente interno para el contenido
+function FaqsContent() {
+  return (
+    <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-12 lg:px-8">
+      <h1 className="text-3xl font-bold tracking-tight text-foreground">Preguntas Frecuentes</h1>
+      <p className="mt-2 text-muted-foreground">
+        Todo lo que necesitas saber sobre envios nacionales, autenticidad y metodos de pago.
+      </p>
+
+      <section className="mt-8 rounded-2xl border border-border bg-white px-6 py-3">
+        <Accordion type="single" collapsible className="w-full">
+          {faqItems.map((item) => (
+            <AccordionItem key={item.id} value={item.id}>
+              <AccordionTrigger className="text-base">{item.question}</AccordionTrigger>
+              <AccordionContent className="text-sm leading-relaxed text-muted-foreground">
+                {item.answer}
+              </AccordionContent>
+            </AccordionItem>
+          ))}
+        </Accordion>
+      </section>
+    </main>
+  )
+}
+
 export default function FaqsPage() {
   return (
     <div className="flex min-h-screen flex-col bg-[#F5F5F7]">
       <Header />
-      <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-12 lg:px-8">
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">Preguntas Frecuentes</h1>
-        <p className="mt-2 text-muted-foreground">
-          Todo lo que necesitas saber sobre envios nacionales, autenticidad y metodos de pago.
-        </p>
-
-        <section className="mt-8 rounded-2xl border border-border bg-white px-6 py-3">
-          <Accordion type="single" collapsible className="w-full">
-            {faqItems.map((item) => (
-              <AccordionItem key={item.id} value={item.id}>
-                <AccordionTrigger className="text-base">{item.question}</AccordionTrigger>
-                <AccordionContent className="text-sm leading-relaxed text-muted-foreground">
-                  {item.answer}
-                </AccordionContent>
-              </AccordionItem>
-            ))}
-          </Accordion>
-        </section>
-      </main>
+      {/* 3. Envolvemos el contenido y componentes que puedan usar hooks en Suspense */}
+      <Suspense fallback={<div className="flex-1 flex items-center justify-center">Cargando...</div>}>
+        <FaqsContent />
+      </Suspense>
       <Footer />
     </div>
   )
