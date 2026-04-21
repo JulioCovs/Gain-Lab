@@ -3,7 +3,7 @@ import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 
-// 1. FORZAMOS RENDERIZADO DINÁMICO (Esto evita el error de prerendering)
+// 1. FORZAMOS RENDERIZADO DINÁMICO (Esto evita el error de prerendering en Vercel)
 export const dynamic = 'force-dynamic';
 
 const faqItems = [
@@ -31,7 +31,7 @@ const faqItems = [
 
 export default function FaqsPage() {
   return (
-    // 2. ENVOLVEMOS TODO EL CONTENIDO
+    // 2. ENVOLVEMOS TODO EL CONTENIDO EN SUSPENSE
     <Suspense fallback={<div className="min-h-screen bg-[#F5F5F7]" />}>
       <div className="flex min-h-screen flex-col bg-[#F5F5F7]">
         <Header />
