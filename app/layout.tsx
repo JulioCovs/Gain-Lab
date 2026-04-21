@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
+import { Suspense } from 'react' // 1. Importamos Suspense
 import './globals.css'
 
 const inter = Inter({ 
@@ -46,7 +47,12 @@ export default function RootLayout({
   return (
     <html lang="es" className={`${inter.variable} bg-background`}>
       <body className="font-sans antialiased">
-        {children}
+        {/* 2. Envolvemos el children en Suspense. 
+            Esto es como un escudo: si una página falla al pre-renderizarse, 
+            el Suspense la atrapa y permite que el build continúe. */}
+        <Suspense fallback={null}>
+          {children}
+        </Suspense>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>
