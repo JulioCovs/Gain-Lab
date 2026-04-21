@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { Suspense } from "react" // 1. Importamos Suspense
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
