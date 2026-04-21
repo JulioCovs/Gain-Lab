@@ -10,7 +10,6 @@ import {
   Plus,
   ShoppingBag,
   Trash2,
-  UserPlus,
   RefreshCw,
   Pencil,
 } from "lucide-react"
@@ -45,6 +44,13 @@ import {
 import { StatsCard } from "./stats-card"
 
 const LOW_STOCK_THRESHOLD = 10
+const ADMIN_EMAILS = new Set(["juliocov@icloud.com", "juancajurs@gmail.com"])
+
+type SalesMetrics = {
+  grossSalesMxn: number | null
+  netSalesMxn: number | null
+  totalOrders: number | null
+}
 
 interface AdminProduct {
   id: string
@@ -65,10 +71,11 @@ interface AdminOrder {
 
 interface AdminClient {
   id: string
+  email?: string
   firstName: string
   lastName: string
   phone: string
-  createdAt: string
+  createdAt?: string
 }
 
 interface AdminCategory {
@@ -101,18 +108,28 @@ type AdminTab = "resumen" | "inventario" | "pedidos" | "clientes"
 export function AdminDashboard() {
   const [loading, setLoading] = useState(true)
   const [categoriesLoading, setCategoriesLoading] = useState(true)
+  const [clientsLoading, setClientsLoading] = useState(true)
+  const [metricsLoading, setMetricsLoading] = useState(true)
+  const [dashboardError, setDashboardError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<AdminTab>("resumen")
   const [products, setProducts] = useState<AdminProduct[]>([])
   const [orders, setOrders] = useState<AdminOrder[]>([])
   const [newClients, setNewClients] = useState(0)
   const [clients, setClients] = useState<AdminClient[]>([])
   const [categories, setCategories] = useState<AdminCategory[]>([])
+  const [salesMetrics, setSalesMetrics] = useState<SalesMetrics>({
+    grossSalesMxn: null,
+    netSalesMxn: null,
+    totalOrders: null,
+  })
   const [form, setForm] = useState<ProductFormState>(initialProductForm)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [productDialogOpen, setProductDialogOpen] = useState(false)
   const [savingProduct, setSavingProduct] = useState(false)
   const [uploadingImage, setUploadingImage] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  const [quickEditDrafts, setQuickEditDrafts] = useState<Record<string, { stock: string; categoryId: string }>>({})
+  const [savingQuickEditId, setSavingQuickEditId] = useState<string | null>(null)
 
   const categoriesById = useMemo(() => {
     return new Map(categories.map((c) => [c.id, c.name]))
@@ -120,6 +137,13 @@ export function AdminDashboard() {
 
   const lowStockCount = products.filter((product) => product.stock < LOW_STOCK_THRESHOLD).length
   const totalSales = orders.reduce((sum, order) => sum + order.total, 0)
+  const totalOrdersAllTime = Math.max(salesMetrics.totalOrders ?? 0, 1)
+  const grossSalesAllTime = salesMetrics.grossSalesMxn ?? 0
+  const averageTicket = grossSalesAllTime / totalOrdersAllTime
+  const criticalStockProducts = useMemo(
+    () => products.filter((product) => product.stock > 0 && product.stock < 5),
+    [products]
+  )
 
   const uploadProductImage = async (file: File) => {
     setUploadingImage(true)
@@ -157,117 +181,165 @@ export function AdminDashboard() {
   const loadDashboardData = async () => {
     setLoading(true)
     setCategoriesLoading(true)
+    setClientsLoading(true)
+    setMetricsLoading(true)
+    setDashboardError(null)
+    try {
+      const {
+        data: { user: currentUser },
+      } = await supabase.auth.getUser()
+      const currentEmail = currentUser?.email?.toLowerCase() ?? null
+      const currentUserIsAdmin = Boolean(currentEmail && ADMIN_EMAILS.has(currentEmail))
 
-    const [categoriesResult, productsResult, ordersResult, clientsCountResult, clientsListResult] =
-      await Promise.all([
+      const [
+        categoriesResult,
+        productsResult,
+        ordersResult,
+        salesMetricsResult,
+      ] = await Promise.allSettled([
         supabase.from("categories").select("id, name").order("name", { ascending: true }),
         supabase.from("products").select("*"),
-      supabase
-        .from("orders")
-        .select("id, created_at, status, total_amount")
-        .order("created_at", { ascending: false })
-        .limit(10),
-      supabase
-        .from("profiles")
-        .select("id", { count: "exact", head: true })
-        .gte("created_at", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()),
-      supabase
-        .from("profiles")
-        .select("id, first_name, last_name, phone, created_at")
-        .order("created_at", { ascending: false })
-        .limit(50),
+        supabase
+          .from("orders")
+          .select("id, created_at, status, total_amount")
+          .order("created_at", { ascending: false })
+          .limit(10),
+        supabase.rpc("dashboard_sales_metrics"),
       ])
 
-    if (categoriesResult.error) {
-      console.warn("No se pudieron obtener categorías:", categoriesResult.error.message)
+      const unwrap = <T,>(r: PromiseSettledResult<T>): T | null => (r.status === "fulfilled" ? r.value : null)
+
+      const categoriesUnwrapped = unwrap(categoriesResult)
+      if (!categoriesUnwrapped || (categoriesUnwrapped as any).error) {
+        const errorMessage = (categoriesUnwrapped as any)?.error?.message ?? "Fallo consultando categorías."
+        console.error("No se pudieron obtener categorías:", errorMessage)
+        setCategories([])
+      } else {
+        const mappedCategories = ((categoriesUnwrapped as any).data ?? []).map((item: unknown) => {
+          const row = item as Record<string, unknown>
+          return {
+            id: String(row?.id ?? ""),
+            name: String(row?.name ?? ""),
+          } as AdminCategory
+        })
+        setCategories(mappedCategories)
+      }
+
+      const productsUnwrapped = unwrap(productsResult)
+      if (!productsUnwrapped || (productsUnwrapped as any).error) {
+        const errorMessage = (productsUnwrapped as any)?.error?.message ?? "Fallo consultando productos."
+        console.error("No se pudieron obtener productos:", errorMessage)
+        setProducts([])
+      } else {
+        const mappedProducts = ((productsUnwrapped as any).data ?? []).map((item: unknown) => {
+          const row = (item as Record<string, unknown>) ?? {}
+
+          const rawCategoryId = row?.category_id ?? row?.categoryId ?? null
+          const rawName = row?.name ?? null
+          const rawPrice = row?.price ?? 0
+          const rawStock = row?.stock ?? 0
+          const rawDescription = row?.description ?? null
+          const rawImageUrl = row?.image_url ?? row?.imageUrl ?? null
+          const categoryId = rawCategoryId ? String(rawCategoryId) : null
+
+          return {
+            id: String(row?.id ?? ""),
+            name: String(rawName ?? ""),
+            description: rawDescription ? String(rawDescription) : null,
+            categoryId,
+            price: Number(rawPrice ?? 0),
+            stock: Number(rawStock ?? 0),
+            imageUrl: rawImageUrl ? String(rawImageUrl) : null,
+          } as AdminProduct
+        })
+        setProducts(mappedProducts)
+      }
+
+      const ordersUnwrapped = unwrap(ordersResult)
+      if (!ordersUnwrapped || (ordersUnwrapped as any).error) {
+        const errorMessage = (ordersUnwrapped as any)?.error?.message ?? "Fallo consultando pedidos."
+        console.error("No se pudieron obtener pedidos:", errorMessage)
+        setOrders([])
+        setDashboardError((prev) => prev ?? errorMessage)
+      } else {
+        const mappedOrders = ((ordersUnwrapped as any).data ?? []).map((item: unknown) => {
+          const row = (item as Record<string, unknown>) ?? {}
+          const rawStatus = String(row?.status ?? "procesando")
+          const normalizedStatus =
+            rawStatus === "entregado" || rawStatus === "en-camino" ? rawStatus : "procesando"
+
+          return {
+            id: String(row?.id ?? ""),
+            createdAt: String(row?.created_at ?? ""),
+            status: normalizedStatus,
+            total: Number(row?.total_amount ?? 0),
+          } as AdminOrder
+        })
+        setOrders(mappedOrders)
+      }
+
+      const { data: profiles, error: clientsError } = await supabase
+        .from('profiles')
+        .select('id, email, first_name, last_name, phone, created_at')
+
+      if (clientsError) {
+        console.error("No se pudieron obtener clientes:", clientsError.message)
+        setClients([])
+        setNewClients(0)
+      } else {
+        const mappedClients = (profiles ?? [])
+          .filter((row) => {
+            const rowEmail = row?.email?.toLowerCase() ?? null
+            if (rowEmail && ADMIN_EMAILS.has(rowEmail)) return false
+            if (currentUserIsAdmin && currentUser?.id && row?.id === currentUser.id) return false
+            return true
+          })
+          .map((row) => {
+            return {
+              id: String(row?.id ?? ""),
+              email: row?.email ? String(row.email) : undefined,
+              firstName: String(row?.first_name ?? ""),
+              lastName: String(row?.last_name ?? ""),
+              phone: String(row?.phone ?? ""),
+              createdAt: row?.created_at ? String(row.created_at) : undefined,
+            } as AdminClient
+          })
+
+        setClients(mappedClients)
+        setNewClients(mappedClients.length)
+      }
+
+      const salesMetricsUnwrapped = unwrap(salesMetricsResult)
+      if (!salesMetricsUnwrapped || (salesMetricsUnwrapped as any).error) {
+        const errorMessage =
+          (salesMetricsUnwrapped as any)?.error?.message ??
+          "No se pudieron obtener métricas de ventas. Verifica la función dashboard_sales_metrics en Supabase."
+        console.error("No se pudieron obtener métricas:", errorMessage)
+        setSalesMetrics({ grossSalesMxn: null, netSalesMxn: null, totalOrders: null })
+        setDashboardError((prev) => prev ?? errorMessage)
+      } else {
+        const row = ((salesMetricsUnwrapped as any).data ?? null) as Record<string, unknown> | null
+        setSalesMetrics({
+          grossSalesMxn: row?.gross_sales_mxn != null ? Number(row.gross_sales_mxn) : null,
+          netSalesMxn: row?.net_sales_mxn != null ? Number(row.net_sales_mxn) : null,
+          totalOrders: row?.total_orders != null ? Number(row.total_orders) : null,
+        })
+      }
+    } catch (err) {
+      console.error("Fallo cargando datos del dashboard:", err)
       setCategories([])
-    } else {
-      const mappedCategories = (categoriesResult.data ?? []).map((item) => {
-        const row = item as Record<string, unknown>
-        return {
-          id: String(row.id ?? ""),
-          name: String(row.name ?? ""),
-        } as AdminCategory
-      })
-      setCategories(mappedCategories)
-    }
-    setCategoriesLoading(false)
-
-    if (productsResult.error) {
-      console.warn("No se pudieron obtener productos:", productsResult.error.message)
       setProducts([])
-    } else {
-      const mappedProducts = (productsResult.data ?? []).map((item) => {
-        const row = item as Record<string, unknown>
-
-        const rawCategoryId =
-          row.category_id ?? row.categoryId ?? row.category ?? row.categoria ?? row.categoria_id ?? null
-        const rawName = row.name ?? row.nombre ?? null
-        const rawPrice = row.price ?? row.precio ?? 0
-        const rawStock = row.stock ?? row.existencia ?? row.inventory ?? 0
-        const rawDescription = row.description ?? row.descripcion ?? null
-        const rawImageUrl =
-          row.image_url ?? row.imageUrl ?? row.image ?? row.imagen ?? row.photo_url ?? row.photoUrl ?? null
-        const categoryId = rawCategoryId ? String(rawCategoryId) : null
-
-        return {
-          id: String(row.id ?? ""),
-          name: String(rawName ?? ""),
-          description: rawDescription ? String(rawDescription) : null,
-          categoryId,
-          price: Number(rawPrice ?? 0),
-          stock: Number(rawStock ?? 0),
-          imageUrl: rawImageUrl ? String(rawImageUrl) : null,
-        }
-      })
-      setProducts(mappedProducts)
-    }
-
-    if (ordersResult.error) {
-      console.warn("No se pudieron obtener pedidos:", ordersResult.error.message)
       setOrders([])
-    } else {
-      const mappedOrders = (ordersResult.data ?? []).map((item) => {
-        const row = item as Record<string, unknown>
-        const rawStatus = String(row.status ?? "procesando")
-        const normalizedStatus =
-          rawStatus === "entregado" || rawStatus === "en-camino" ? rawStatus : "procesando"
-
-        return {
-          id: String(row.id ?? ""),
-          createdAt: String(row.created_at ?? ""),
-          status: normalizedStatus,
-          total: Number(row.total_amount ?? 0),
-        } as AdminOrder
-      })
-      setOrders(mappedOrders)
-    }
-
-    if (clientsCountResult.error) {
-      console.warn("No se pudieron obtener clientes nuevos:", clientsCountResult.error.message)
       setNewClients(0)
-    } else {
-      setNewClients(clientsCountResult.count ?? 0)
-    }
-
-    if (clientsListResult.error) {
-      console.warn("No se pudieron obtener clientes:", clientsListResult.error.message)
       setClients([])
-    } else {
-      const mappedClients = (clientsListResult.data ?? []).map((item) => {
-        const row = item as Record<string, unknown>
-        return {
-          id: String(row.id ?? ""),
-          firstName: String(row.first_name ?? ""),
-          lastName: String(row.last_name ?? ""),
-          phone: String(row.phone ?? ""),
-          createdAt: String(row.created_at ?? ""),
-        } as AdminClient
-      })
-      setClients(mappedClients)
+      setSalesMetrics({ grossSalesMxn: null, netSalesMxn: null, totalOrders: null })
+      setDashboardError("Fallo cargando datos del dashboard. Revisa consola para detalles.")
+    } finally {
+      setCategoriesLoading(false)
+      setClientsLoading(false)
+      setMetricsLoading(false)
+      setLoading(false)
     }
-
-    setLoading(false)
   }
 
   const resetForm = () => {
@@ -402,6 +474,67 @@ export function AdminDashboard() {
 
   const filteredProducts = useMemo(() => products.filter((product) => !product.id.includes("bundle")), [products])
 
+  const quickEditById = useMemo(() => {
+    return filteredProducts.reduce(
+      (acc, product) => {
+        acc[product.id] = quickEditDrafts[product.id] ?? {
+          stock: String(product.stock),
+          categoryId: product.categoryId ?? "",
+        }
+        return acc
+      },
+      {} as Record<string, { stock: string; categoryId: string }>
+    )
+  }, [filteredProducts, quickEditDrafts])
+
+  const updateQuickEditDraft = (productId: string, partial: Partial<{ stock: string; categoryId: string }>) => {
+    setQuickEditDrafts((prev) => {
+      const current = prev[productId] ?? {
+        stock: String(filteredProducts.find((product) => product.id === productId)?.stock ?? 0),
+        categoryId: filteredProducts.find((product) => product.id === productId)?.categoryId ?? "",
+      }
+      return {
+        ...prev,
+        [productId]: { ...current, ...partial },
+      }
+    })
+  }
+
+  const saveQuickInventoryUpdate = async (product: AdminProduct) => {
+    const draft = quickEditById[product.id]
+    if (!draft) return
+
+    const stockValue = Number(draft.stock)
+    if (!Number.isFinite(stockValue)) {
+      return
+    }
+
+    setSavingQuickEditId(product.id)
+    const { error } = await supabase
+      .from("products")
+      .update({ stock: stockValue, category_id: draft.categoryId })
+      .eq("id", product.id)
+
+    if (error) {
+      console.warn("No se pudo guardar edición rápida:", error.message)
+      setSavingQuickEditId(null)
+      return
+    }
+
+    setProducts((prev) =>
+      prev.map((item) =>
+        item.id === product.id
+          ? {
+              ...item,
+              stock: stockValue,
+              categoryId: draft.categoryId,
+            }
+          : item
+      )
+    )
+    setSavingQuickEditId(null)
+  }
+
   return (
     <div className="min-h-screen bg-[#F5F5F7]">
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
@@ -468,34 +601,94 @@ export function AdminDashboard() {
         </aside>
 
         <main className="space-y-6">
+          {dashboardError ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              {dashboardError}
+            </div>
+          ) : null}
+
           {activeTab === "resumen" && (
-            <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <StatsCard
-                title="Ventas Totales"
-                value={`$${totalSales.toLocaleString()} MXN`}
-                icon={DollarSign}
-                description="Suma de pedidos"
-              />
-              <StatsCard
-                title="Número de Pedidos"
-                value={orders.length.toString()}
-                icon={ShoppingBag}
-                description="Últimos registros"
-              />
-              <StatsCard
-                title="Clientes Nuevos"
-                value={newClients.toString()}
-                icon={UserPlus}
-                description="Últimos 30 días"
-              />
-              <StatsCard
-                title="Stock Bajo"
-                value={lowStockCount.toString()}
-                icon={Boxes}
-                description="Productos por debajo de 10"
-                variant={lowStockCount > 0 ? "warning" : "default"}
-              />
-            </section>
+            <>
+              <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <StatsCard
+                  title="Ventas Brutas"
+                  value={
+                    metricsLoading || salesMetrics.grossSalesMxn == null
+                      ? "—"
+                      : `$${Number(salesMetrics.grossSalesMxn).toLocaleString()} MXN`
+                  }
+                  icon={DollarSign}
+                  description="Suma real de ingresos (orders)"
+                />
+                <StatsCard
+                  title="Ventas Netas"
+                  value={
+                    metricsLoading
+                      ? "—"
+                      : salesMetrics.netSalesMxn == null
+                        ? "Pendiente (costos/margen)"
+                        : `$${Number(salesMetrics.netSalesMxn).toLocaleString()} MXN`
+                  }
+                  icon={DollarSign}
+                  description={
+                    salesMetrics.netSalesMxn == null
+                      ? "Listo para calcular cuando agregues costos/margen"
+                      : "Ingresos - costos (si existe columna de costos)"
+                  }
+                  variant="success"
+                />
+                <StatsCard
+                  title="Número de Pedidos"
+                  value={
+                    metricsLoading || salesMetrics.totalOrders == null ? "—" : String(salesMetrics.totalOrders)
+                  }
+                  icon={ShoppingBag}
+                  description="Total de pedidos (todos)"
+                />
+                <StatsCard
+                  title="Ticket Promedio"
+                  value={
+                    metricsLoading || salesMetrics.grossSalesMxn == null || salesMetrics.totalOrders == null
+                      ? "—"
+                      : `$${averageTicket.toLocaleString(undefined, { maximumFractionDigits: 0 })} MXN`
+                  }
+                  icon={DollarSign}
+                  description="Venta bruta / total de pedidos"
+                />
+                <StatsCard
+                  title="Ventas por Pedidos"
+                  value={`$${totalSales.toLocaleString()} MXN`}
+                  icon={DollarSign}
+                  description="Suma de pedidos capturados"
+                />
+                <StatsCard
+                  title="Stock Bajo"
+                  value={lowStockCount.toString()}
+                  icon={Boxes}
+                  description="Productos por debajo de 10"
+                  variant={lowStockCount > 0 ? "warning" : "default"}
+                />
+              </section>
+
+              <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <h2 className="text-base font-semibold">Alertas de Stock (menos de 5 unidades)</h2>
+                {criticalStockProducts.length === 0 ? (
+                  <p className="mt-3 text-sm text-muted-foreground">Sin alertas criticas en este momento.</p>
+                ) : (
+                  <div className="mt-3 space-y-2">
+                    {criticalStockProducts.map((product) => (
+                      <div
+                        key={product.id}
+                        className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-3 py-2"
+                      >
+                        <span className="text-sm font-medium text-slate-900">{product.name}</span>
+                        <Badge className="bg-amber-100 text-amber-800">Quedan {product.stock}</Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            </>
           )}
 
           {activeTab === "inventario" && (
@@ -668,30 +861,65 @@ export function AdminDashboard() {
                     </TableHeader>
                     <TableBody>
                       {filteredProducts.map((product) => (
-                        <TableRow key={product.id}>
+                        <TableRow key={product?.id}>
                           <TableCell>
-                            {product.imageUrl ? (
-                              <img
-                                src={product.imageUrl}
-                                alt={product.name}
-                                className="h-10 w-10 rounded-md object-cover"
-                              />
-                            ) : (
-                              <div className="h-10 w-10 rounded-md bg-slate-100" />
-                            )}
+                            <img
+                              src={product?.imageUrl ?? "/placeholder.png"}
+                              alt={product?.name ?? "Producto"}
+                              className="h-10 w-10 rounded-md object-cover"
+                              onError={(e) => {
+                                e.currentTarget.src = "/placeholder.png"
+                              }}
+                            />
                           </TableCell>
-                          <TableCell className="font-medium">{product.name}</TableCell>
+                          <TableCell className="font-medium">{product?.name ?? "(Sin nombre)"}</TableCell>
                           <TableCell>
-                            {product.categoryId ? categoriesById.get(product.categoryId) ?? product.categoryId : "-"}
+                            {product?.categoryId
+                              ? categoriesById.get(product.categoryId) ?? product.categoryId
+                              : "-"}
                           </TableCell>
-                          <TableCell className="text-right">${product.price.toLocaleString()} MXN</TableCell>
+                          <TableCell className="text-right">
+                            ${Number(product?.price ?? 0).toLocaleString()} MXN
+                          </TableCell>
                           <TableCell
-                            className={`text-right ${product.stock < LOW_STOCK_THRESHOLD ? "text-red-600" : ""}`}
+                            className={`text-right ${
+                              Number(product?.stock ?? 0) < LOW_STOCK_THRESHOLD ? "text-red-600" : ""
+                            }`}
                           >
-                            {product.stock}
+                            <div className="ml-auto flex max-w-[150px] items-center justify-end gap-2">
+                              <Input
+                                type="number"
+                                className="h-8 w-20 text-right"
+                                value={quickEditById[product.id]?.stock ?? String(Number(product?.stock ?? 0))}
+                                onChange={(e) => updateQuickEditDraft(product.id, { stock: e.target.value })}
+                              />
+                            </div>
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
+                              <Select
+                                value={quickEditById[product.id]?.categoryId ?? product.categoryId ?? ""}
+                                onValueChange={(value) => updateQuickEditDraft(product.id, { categoryId: value })}
+                              >
+                                <SelectTrigger className="h-8 w-[180px]">
+                                  <SelectValue placeholder="Categoría" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {categories.map((category) => (
+                                    <SelectItem key={category.id} value={category.id}>
+                                      {category.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                disabled={savingQuickEditId === product.id}
+                                onClick={() => saveQuickInventoryUpdate(product)}
+                              >
+                                {savingQuickEditId === product.id ? "Guardando..." : "Guardar"}
+                              </Button>
                               <Button variant="outline" size="sm" onClick={() => handleEditProduct(product)}>
                                 <Pencil className="mr-1 h-3 w-3" />
                                 Editar
@@ -766,7 +994,7 @@ export function AdminDashboard() {
                 </div>
               </div>
 
-              {loading ? (
+              {clientsLoading ? (
                 <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Cargando clientes...
@@ -786,14 +1014,13 @@ export function AdminDashboard() {
                     </TableHeader>
                     <TableBody>
                       {clients.map((client) => {
-                        const name = `${client.firstName} ${client.lastName}`.trim() || "(Sin nombre)"
                         return (
-                          <TableRow key={client.id}>
-                            <TableCell className="font-medium">{name}</TableCell>
-                            <TableCell>{client.phone || "-"}</TableCell>
-                            <TableCell className="font-mono text-xs text-slate-600">{client.id}</TableCell>
+                          <TableRow key={client?.id}>
+                            <TableCell className="font-medium">{client?.firstName || "Sin nombre"}</TableCell>
+                            <TableCell>{client?.phone || "-"}</TableCell>
+                            <TableCell className="font-mono text-xs text-slate-600">{client?.id}</TableCell>
                             <TableCell className="text-right text-sm text-slate-600">
-                              {client.createdAt ? new Date(client.createdAt).toLocaleDateString("es-MX") : "-"}
+                              {client?.createdAt ? new Date(client.createdAt).toLocaleDateString("es-MX") : "-"}
                             </TableCell>
                           </TableRow>
                         )

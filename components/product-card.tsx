@@ -1,5 +1,7 @@
 "use client"
 
+import Link from "next/link"
+import { useEffect, useState } from "react"
 import { ShoppingCart, Check, Sparkles, AlertTriangle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -14,9 +16,28 @@ export function ProductCard({ product }: ProductCardProps) {
   const addItem = useCartStore((state) => state.addItem)
   const items = useCartStore((state) => state.items)
   const isInCart = items.some((item) => item.product.id === product.id)
+  const [isAdding, setIsAdding] = useState(false)
+
+  useEffect(() => {
+    let timeoutId: number | undefined
+    if (isAdding) {
+      timeoutId = window.setTimeout(() => setIsAdding(false), 1200)
+    }
+    return () => {
+      if (timeoutId) window.clearTimeout(timeoutId)
+    }
+  }, [isAdding])
+
+  const handleAddToCart = () => {
+    setIsAdding(true)
+    addItem(product)
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent("cart:item-added"))
+    }, 350)
+  }
 
   return (
-    <div className="group relative flex flex-col overflow-hidden rounded-xl border border-border bg-card transition-all duration-300 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5">
+    <div className="group relative flex h-full min-h-[430px] flex-col overflow-hidden rounded-2xl border border-border/80 bg-card transition-all duration-300 hover:border-primary/40 hover:shadow-xl hover:shadow-primary/5">
       {/* Badge */}
       {product.badge && (
         <div className="absolute left-3 top-3 z-10">
@@ -42,26 +63,38 @@ export function ProductCard({ product }: ProductCardProps) {
           </Badge>
         </div>
       )}
-
-      {/* Image Placeholder */}
-      <div className="relative aspect-square bg-muted">
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="h-24 w-24 rounded-full bg-secondary/50" />
+      {product.stock > 0 && product.stock < 5 && (
+        <div className="absolute bottom-3 left-3 z-10">
+          <Badge variant="secondary" className="bg-foreground/90 text-background">
+            ¡Ultimas unidades!
+          </Badge>
         </div>
+      )}
+
+      {/* Product Image */}
+      <div className="relative aspect-square bg-muted">
+        <img
+          src={product.image}
+          alt={`${product.name} suplemento premium Gain Lab`}
+          className="h-full w-full object-cover"
+          loading="lazy"
+        />
         <div className="absolute inset-0 bg-gradient-to-t from-card via-transparent to-transparent" />
       </div>
 
       {/* Content */}
-      <div className="flex flex-1 flex-col p-4">
-        <h3 className="font-semibold leading-tight text-foreground group-hover:text-primary transition-colors">
-          {product.name}
-        </h3>
-        <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+      <div className="flex flex-1 flex-col p-6">
+        <Link href={`/productos/${product.id}`}>
+          <h3 className="font-semibold leading-tight text-foreground transition-colors group-hover:text-primary">
+            {product.name}
+          </h3>
+        </Link>
+        <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">
           {product.description}
         </p>
 
         {/* Benefits */}
-        <div className="mt-3 flex flex-wrap gap-1.5">
+        <div className="mt-4 flex flex-wrap gap-1.5">
           {product.benefits.slice(0, 3).map((benefit) => (
             <span
               key={benefit}
@@ -74,7 +107,7 @@ export function ProductCard({ product }: ProductCardProps) {
         </div>
 
         {/* Price & Add to Cart */}
-        <div className="mt-auto flex items-end justify-between pt-4">
+        <div className="mt-auto flex items-end justify-between pt-6">
           <div>
             <span className="text-2xl font-bold text-foreground">
               ${product.price.toLocaleString()} MXN
@@ -87,11 +120,16 @@ export function ProductCard({ product }: ProductCardProps) {
           </div>
           <Button
             size="sm"
-            variant={isInCart ? "secondary" : "default"}
-            onClick={() => addItem(product)}
+            variant={isAdding || isInCart ? "secondary" : "default"}
+            onClick={handleAddToCart}
             className="gap-2"
           >
-            {isInCart ? (
+            {isAdding ? (
+              <>
+                <Check className="h-4 w-4" />
+                Agregado
+              </>
+            ) : isInCart ? (
               <>
                 <Check className="h-4 w-4" />
                 Añadido

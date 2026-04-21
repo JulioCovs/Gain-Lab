@@ -1,5 +1,11 @@
+"use client"
+
 import Link from "next/link"
+import { FormEvent, useState } from "react"
 import { Dumbbell, Instagram, Twitter } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 
 // Short category names for footer
 const footerCategories = [
@@ -10,9 +16,65 @@ const footerCategories = [
 ]
 
 export function Footer() {
+  const [email, setEmail] = useState("")
+  const [submitted, setSubmitted] = useState(false)
+  const [storedEmail, setStoredEmail] = useState("")
+
+  const handleNewsletterSubmit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    if (!email.trim()) return
+    const normalizedEmail = email.trim().toLowerCase()
+    setStoredEmail(normalizedEmail)
+    const existing = JSON.parse(localStorage.getItem("gainlab-newsletter-leads") ?? "[]") as string[]
+    localStorage.setItem("gainlab-newsletter-leads", JSON.stringify([...new Set([...existing, normalizedEmail])]))
+    setSubmitted(true)
+    setEmail("")
+  }
+
   return (
     <footer className="border-t border-border bg-card">
       <div className="mx-auto max-w-7xl px-4 py-12 lg:px-8">
+        <div className="mb-10 rounded-2xl border border-border bg-background p-6 lg:p-8">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Mision</p>
+          <p className="mt-3 max-w-5xl text-sm leading-relaxed text-muted-foreground">
+            En Gain Lab, nuestra mision es democratizar la suplementacion de alto rendimiento en todo Mexico.
+            Disenamos una experiencia de compra inteligente para atletas que no aceptan excusas y buscan
+            resultados reales a traves de ciencia y calidad superior.
+          </p>
+          <div className="mt-5">
+            <p className="mb-3 text-sm text-muted-foreground">
+              Únete al Laboratorio. Recibe lanzamientos exclusivos y descuentos.
+            </p>
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="outline">Suscribirme al Newsletter</Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Newsletter Gain Lab</DialogTitle>
+                </DialogHeader>
+                <form className="space-y-3" onSubmit={handleNewsletterSubmit}>
+                  <Input
+                    type="email"
+                    placeholder="tu@email.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                  />
+                  <Button type="submit" className="w-full">
+                    Recibir novedades
+                  </Button>
+                  {submitted && (
+                    <p className="text-xs text-muted-foreground">
+                      Correo capturado: {storedEmail}. Gracias por unirte.
+                    </p>
+                  )}
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </div>
+
         <div className="grid gap-8 md:grid-cols-4">
           {/* Brand */}
           <div className="md:col-span-1">
@@ -50,7 +112,7 @@ export function Footer() {
               {footerCategories.map((category) => (
                 <li key={category.id}>
                   <Link
-                    href={`/#${category.id}`}
+                    href={`/?category=${category.id}`}
                     className="text-sm text-muted-foreground transition-colors hover:text-foreground"
                   >
                     {category.name}
@@ -66,10 +128,10 @@ export function Footer() {
             <ul className="mt-4 space-y-3">
               <li>
                 <Link
-                  href="#"
+                  href="/faqs"
                   className="text-sm text-muted-foreground transition-colors hover:text-foreground"
                 >
-                  FAQ
+                  FAQs
                 </Link>
               </li>
               <li>

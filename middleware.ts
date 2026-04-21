@@ -1,113 +1,48 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
+import { getSessionUser } from "./supabase/middleware"
 
-const ALLOWED_EMAILS = new Set(["juliocov@icloud.com", "juancajurs@gmail.com"])
-
-function decodeBase64Url(value: string): string {
-  const normalized = value.replace(/-/g, "+").replace(/_/g, "/")
-  const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4)
-  return atob(padded)
-}
-
-function extractTokenFromCookie(rawCookieValue: string | undefined): string | null {
-  if (!rawCookieValue) return null
-  const decodedCookieValue = decodeURIComponent(rawCookieValue)
-
-  // Some setups store the raw access token directly.
-  if (decodedCookieValue.split(".").length === 3) return decodedCookieValue
-
-  // Some setups store JSON with access_token.
-  try {
-    const parsed = JSON.parse(decodedCookieValue) as { access_token?: string }
-    if (parsed.access_token) return parsed.access_token
-  } catch {
-    // Ignore, we try other formats below.
-  }
-
-  // Supabase SSR can store cookie as base64-encoded JSON.
-  if (decodedCookieValue.startsWith("base64-")) {
-    try {
-      const decoded = decodeBase64Url(decodedCookieValue.replace("base64-", ""))
-      const parsed = JSON.parse(decoded) as { access_token?: string }
-      if (parsed.access_token) return parsed.access_token
-    } catch {
-      return null
-    }
-  }
-
-  return null
-}
-
-function readSupabaseAccessToken(request: NextRequest): string | null {
-  const cookieStore = request.cookies.getAll()
-
-  const directToken = extractTokenFromCookie(request.cookies.get("sb-access-token")?.value)
-  if (directToken) return directToken
-
-  const authCookie = cookieStore.find((cookie) =>
-    /^sb-[a-z0-9]+-auth-token$/.test(cookie.name)
-  )
-  if (authCookie) {
-    const token = extractTokenFromCookie(authCookie.value)
-    if (token) return token
-  }
-
-  const chunkedCookies = cookieStore
-    .filter((cookie) => /^sb-[a-z0-9]+-auth-token\.\d+$/.test(cookie.name))
-    .sort((a, b) => Number(a.name.split(".").pop()) - Number(b.name.split(".").pop()))
-
-  if (chunkedCookies.length > 0) {
-    const combined = chunkedCookies.map((cookie) => cookie.value).join("")
-    const token = extractTokenFromCookie(combined)
-    if (token) return token
-  }
-
-  return null
-}
+const ADMIN_DASHBOARD_PATH = "/admin-dashboard"
+const ADMIN_FALLBACK_PATH = "/admin"
+const LOGIN_PATH = "/login"
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Excepciones: el middleware NO debe ejecutarse en login/auth
-  // para evitar bucles de redirección durante el inicio de sesión.
-  if (pathname === "/login" || pathname.startsWith("/auth")) {
+  // Excepciones extra (por seguridad) para evitar tocar rutas estáticas.
+  if (
+    pathname.startsWith("/_next") ||
+    pathname === "/favicon.ico" ||
+    pathname === "/robots.txt" ||
+    pathname === "/sitemap.xml"
+  ) {
     return NextResponse.next()
   }
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  const isLoginRoute = pathname === LOGIN_PATH
+  const isProtectedAdminRoute =
+    pathname === ADMIN_DASHBOARD_PATH ||
+    pathname.startsWith(`${ADMIN_DASHBOARD_PATH}/`) ||
+    pathname === ADMIN_FALLBACK_PATH ||
+    pathname.startsWith(`${ADMIN_FALLBACK_PATH}/`)
+  const { user, response } = await getSessionUser(request)
+  const isAuthenticated = Boolean(user)
 
-  if (!supabaseUrl || !supabaseAnonKey) {
-    return NextResponse.redirect(new URL("/", request.url))
+  if (isLoginRoute) {
+    if (isAuthenticated) {
+      return NextResponse.redirect(new URL(ADMIN_FALLBACK_PATH, request.url))
+    }
+    return response
   }
 
-  const accessToken = readSupabaseAccessToken(request)
-  if (!accessToken) {
-    return NextResponse.next()
+  if (isProtectedAdminRoute && !isAuthenticated) {
+    return NextResponse.redirect(new URL(LOGIN_PATH, request.url))
   }
 
-  const supabase = createClient(supabaseUrl, supabaseAnonKey)
-
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser(accessToken)
-
-  if (error || !user) {
-    console.log("No se pudo validar usuario en middleware:", error?.message)
-    return NextResponse.next()
-  }
-
-  console.log("Correo del usuario intentando entrar:", user.email)
-
-  const normalizedEmail = user.email?.toLowerCase()
-  if (!normalizedEmail || !ALLOWED_EMAILS.has(normalizedEmail)) {
-    return NextResponse.next()
-  }
-
-  return NextResponse.next()
+  return response
 }
 
 export const config = {
-  matcher: ["/admin/:path*"],
+  // Solo correr en rutas relevantes (incluye /login para redirigir si ya hay sesión).
+  // /auth y assets estáticos quedan fuera del matcher.
+  matcher: ["/login", "/admin/:path*", "/admin-dashboard/:path*"],
 }

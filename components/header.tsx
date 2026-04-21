@@ -2,12 +2,14 @@
 
 import Link from "next/link"
 import { useEffect, useState } from "react"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { ShoppingCart, Menu, Dumbbell, Shield, User as UserIcon } from "lucide-react"
 import type { User } from "@supabase/supabase-js"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { useCartStore } from "@/lib/cart-store"
+import type { Category } from "@/lib/store-data"
 import { supabase } from "@/lib/supabase"
 import { CartDrawer } from "./cart-drawer"
 
@@ -22,12 +24,16 @@ const navCategories = [
 const ADMIN_EMAILS = new Set(["juliocov@icloud.com", "juancajurs@gmail.com"])
 
 export function Header() {
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
   const [isOpen, setIsOpen] = useState(false)
   const [cartOpen, setCartOpen] = useState(false)
   const [user, setUser] = useState<User | null>(null)
   const [firstName, setFirstName] = useState("")
   const itemCount = useCartStore((state) => state.getItemCount())
   const isAdmin = user?.email ? ADMIN_EMAILS.has(user.email) : false
+  const activeCategory = searchParams.get("category")
 
   useEffect(() => {
     const loadProfileName = async (userId: string, metadataName?: string) => {
@@ -92,6 +98,39 @@ export function Header() {
     }
   }, [])
 
+  useEffect(() => {
+    const openDrawerOnAdd = () => setCartOpen(true)
+    window.addEventListener("cart:item-added", openDrawerOnAdd)
+    return () => window.removeEventListener("cart:item-added", openDrawerOnAdd)
+  }, [])
+
+  const handleCategorySelect = (categoryId: Category) => {
+    const params = new URLSearchParams(searchParams.toString())
+    params.set("category", categoryId)
+
+    if (pathname === "/") {
+      router.replace(`/?${params.toString()}`, { scroll: false })
+    } else {
+      router.push(`/?${params.toString()}`)
+    }
+
+    setIsOpen(false)
+  }
+
+  const handleShowAll = () => {
+    const params = new URLSearchParams(searchParams.toString())
+    params.delete("category")
+    const nextQuery = params.toString()
+
+    if (pathname === "/") {
+      router.replace(nextQuery ? `/?${nextQuery}` : "/", { scroll: false })
+    } else {
+      router.push(nextQuery ? `/?${nextQuery}` : "/")
+    }
+
+    setIsOpen(false)
+  }
+
   return (
     <header className="sticky top-0 z-50 w-full bg-[#F5F5F7]">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 lg:px-8">
@@ -105,14 +144,26 @@ export function Header() {
 
         {/* Desktop Navigation */}
         <nav className="hidden items-center gap-6 lg:flex">
+          <button
+            type="button"
+            onClick={handleShowAll}
+            className={`text-sm font-semibold uppercase tracking-wide transition-colors ${
+              !activeCategory ? "text-primary" : "text-[#000000] hover:text-primary"
+            }`}
+          >
+            Inicio
+          </button>
           {navCategories.map((category) => (
-            <Link
+            <button
               key={category.id}
-              href={`/#${category.id}`}
-              className="text-sm font-semibold uppercase tracking-wide text-[#000000] transition-colors hover:text-[#000000]"
+              type="button"
+              onClick={() => handleCategorySelect(category.id as Category)}
+              className={`text-sm font-semibold uppercase tracking-wide transition-colors ${
+                activeCategory === category.id ? "text-primary" : "text-[#000000] hover:text-primary"
+              }`}
             >
               {category.shortName}
-            </Link>
+            </button>
           ))}
         </nav>
 
@@ -178,29 +229,42 @@ export function Header() {
                 <span className="sr-only">Menu</span>
               </Button>
             </SheetTrigger>
-            <SheetContent side="right" className="w-[300px] bg-white">
-              <div className="flex flex-col gap-8 pt-8 px-2">
+            <SheetContent side="right" className="w-[320px] bg-white px-6">
+              <div className="flex flex-col gap-10 pt-10">
                 <Link href="/" className="flex items-center gap-2" onClick={() => setIsOpen(false)}>
                   <Dumbbell className="h-7 w-7 text-primary" />
                   <span className="text-xl font-black tracking-tighter uppercase text-foreground">
                     GAIN <span className="text-primary">LAB</span>
                   </span>
                 </Link>
-                <nav className="flex flex-col space-y-6 py-4">
+                <nav className="flex flex-col gap-3 py-4">
+                  <button
+                    type="button"
+                    className={`rounded-xl px-4 py-3 text-left text-base font-semibold uppercase tracking-wide transition-colors ${
+                      !activeCategory ? "bg-primary/10 text-primary" : "text-[#000000] hover:bg-black/5"
+                    }`}
+                    onClick={handleShowAll}
+                  >
+                    Todos
+                  </button>
                   {navCategories.map((category) => (
-                    <Link
+                    <button
                       key={category.id}
-                      href={`/#${category.id}`}
-                      className="py-1 text-lg font-semibold uppercase tracking-wide text-[#000000] transition-colors hover:text-[#000000]"
-                      onClick={() => setIsOpen(false)}
+                      type="button"
+                      className={`rounded-xl px-4 py-3 text-left text-base font-semibold uppercase tracking-wide transition-colors ${
+                        activeCategory === category.id
+                          ? "bg-primary/10 text-primary"
+                          : "text-[#000000] hover:bg-black/5"
+                      }`}
+                      onClick={() => handleCategorySelect(category.id as Category)}
                     >
                       {category.name}
-                    </Link>
+                    </button>
                   ))}
-                  <div className="border-t border-gray-200 pt-6 mt-2">
+                  <div className="mt-2 border-t border-gray-200 pt-6">
                     <Link
                       href={user ? "/perfil" : "/auth"}
-                      className="flex items-center gap-3 py-2 text-lg font-medium text-[#000000] transition-colors hover:text-[#000000]"
+                      className="flex items-center gap-3 rounded-xl px-4 py-3 text-base font-medium text-[#000000] transition-colors hover:bg-black/5"
                       onClick={() => setIsOpen(false)}
                     >
                       <UserIcon className="h-5 w-5" />
@@ -210,7 +274,7 @@ export function Header() {
                   {isAdmin && (
                     <Link
                       href="/admin"
-                      className="flex items-center gap-3 rounded-lg px-4 py-3 text-lg font-medium text-[#000000] transition-colors hover:text-[#000000] hover:bg-black/5"
+                      className="flex items-center gap-3 rounded-xl px-4 py-3 text-base font-medium text-[#000000] transition-colors hover:bg-black/5"
                       onClick={() => setIsOpen(false)}
                     >
                       <Shield className="h-5 w-5" />

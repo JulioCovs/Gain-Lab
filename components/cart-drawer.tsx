@@ -6,6 +6,7 @@ import { Minus, Plus, Trash2, ShoppingBag, Sparkles } from "lucide-react"
 import { useCartStore } from "@/lib/cart-store"
 import { checkBundleEligibility } from "@/lib/store-data"
 import Link from "next/link"
+import { useMemo, useState } from "react"
 
 interface CartDrawerProps {
   open: boolean
@@ -15,6 +16,12 @@ interface CartDrawerProps {
 export function CartDrawer({ open, onOpenChange }: CartDrawerProps) {
   const { items, removeItem, updateQuantity, getTotal, clearCart, addItem } = useCartStore()
   const bundleCheck = checkBundleEligibility(items)
+  const [postalCode, setPostalCode] = useState("")
+
+  const shippingCost = useMemo(() => {
+    if (postalCode.length !== 5) return null
+    return 120
+  }, [postalCode])
 
   const handleApplyBundle = () => {
     if (bundleCheck.bundle) {
@@ -133,10 +140,35 @@ export function CartDrawer({ open, onOpenChange }: CartDrawerProps) {
             </div>
 
             <div className="border-t border-border px-4 py-4">
+              <div className="mb-4 rounded-lg border border-border bg-muted/30 p-3">
+                <p className="text-sm font-medium">Calculo de envio nacional</p>
+                <div className="mt-2 flex gap-2">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={5}
+                    value={postalCode}
+                    onChange={(e) => setPostalCode(e.target.value.replace(/\D/g, ""))}
+                    placeholder="Codigo postal"
+                    className="h-9 flex-1 rounded-md border border-border bg-background px-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
+                  />
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {shippingCost === null
+                    ? "Ingresa 5 digitos para simular la tarifa nacional."
+                    : `Tarifa nacional estimada: $${shippingCost.toLocaleString()} MXN`}
+                </p>
+              </div>
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Subtotal</span>
                 <span className="text-lg font-semibold">${getTotal().toLocaleString()} MXN</span>
               </div>
+              {shippingCost !== null && (
+                <div className="mt-1 flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Envio estimado</span>
+                  <span className="font-medium">${shippingCost.toLocaleString()} MXN</span>
+                </div>
+              )}
               <p className="mt-1 text-xs text-muted-foreground">
                 Envío gratis en pedidos mayores a $999 MXN
               </p>
