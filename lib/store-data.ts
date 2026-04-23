@@ -9,6 +9,8 @@ export interface Product {
   goals: Goal[]
   price: number
   originalPrice?: number
+  vipBasePrice?: number
+  vipDiscountPercentage?: number
   description: string
   benefits: string[]
   stock: number

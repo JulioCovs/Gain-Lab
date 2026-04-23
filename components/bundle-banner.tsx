@@ -3,13 +3,17 @@
 import { Sparkles, ArrowRight, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useCartStore } from "@/lib/cart-store"
+import { applyPercentageDiscount } from "@/lib/pricing"
 import { getBundles } from "@/lib/store-data"
+import { useVipDiscountStore } from "@/lib/vip-discount-store"
 
 export function BundleBanner() {
   const addItem = useCartStore((state) => state.addItem)
   const items = useCartStore((state) => state.items)
   const bundles = getBundles()
   const bundle = bundles[0] // Combo Bienestar
+  const vipDiscountPercentage = useVipDiscountStore((s) => s.discountPercentage)
+  const hasVipDiscount = vipDiscountPercentage > 0
 
   if (!bundle) return null
 
@@ -18,6 +22,7 @@ export function BundleBanner() {
     ? (bundle.originalPrice - bundle.price).toLocaleString()
     : "0"
   const discountPercent = bundle.bundleDiscount || 0
+  const vipPrice = hasVipDiscount ? applyPercentageDiscount(bundle.price, vipDiscountPercentage) : bundle.price
 
   return (
     <section className="relative overflow-hidden bg-card border-y border-border">
@@ -66,17 +71,29 @@ export function BundleBanner() {
               <div>
                 <div className="flex items-baseline gap-2">
                   <span className="text-4xl font-bold text-foreground">
-                    ${bundle.price.toLocaleString()} MXN
+                    ${vipPrice.toLocaleString()} MXN
                   </span>
-                  {bundle.originalPrice && (
+                  {hasVipDiscount ? (
                     <span className="text-xl text-muted-foreground line-through">
-                      ${bundle.originalPrice.toLocaleString()} MXN
+                      ${bundle.price.toLocaleString()} MXN
                     </span>
+                  ) : (
+                    bundle.originalPrice && (
+                      <span className="text-xl text-muted-foreground line-through">
+                        ${bundle.originalPrice.toLocaleString()} MXN
+                      </span>
+                    )
                   )}
                 </div>
-                <p className="mt-1 text-sm text-primary font-medium">
-                  Ahorras ${savings} MXN ({discountPercent}% dto.)
-                </p>
+                {hasVipDiscount ? (
+                  <p className="mt-1 text-sm text-primary font-medium">
+                    Descuento VIP: {vipDiscountPercentage}% aplicado
+                  </p>
+                ) : (
+                  <p className="mt-1 text-sm text-primary font-medium">
+                    Ahorras ${savings} MXN ({discountPercent}% dto.)
+                  </p>
+                )}
               </div>
               <Button
                 size="lg"

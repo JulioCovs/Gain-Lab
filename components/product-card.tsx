@@ -6,6 +6,8 @@ import { ShoppingCart, Check, Sparkles, AlertTriangle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useCartStore } from "@/lib/cart-store"
+import { applyPercentageDiscount } from "@/lib/pricing"
+import { useVipDiscountStore } from "@/lib/vip-discount-store"
 import type { Product } from "@/lib/store-data"
 
 interface ProductCardProps {
@@ -17,6 +19,9 @@ export function ProductCard({ product }: ProductCardProps) {
   const items = useCartStore((state) => state.items)
   const isInCart = items.some((item) => item.product.id === product.id)
   const [isAdding, setIsAdding] = useState(false)
+  const vipDiscountPercentage = useVipDiscountStore((s) => s.discountPercentage)
+  const hasVipDiscount = vipDiscountPercentage > 0
+  const vipPrice = hasVipDiscount ? applyPercentageDiscount(product.price, vipDiscountPercentage) : product.price
 
   useEffect(() => {
     let timeoutId: number | undefined
@@ -94,29 +99,51 @@ export function ProductCard({ product }: ProductCardProps) {
         </p>
 
         {/* Benefits */}
-        <div className="mt-4 flex flex-wrap gap-1.5">
-          {product.benefits.slice(0, 3).map((benefit) => (
-            <span
-              key={benefit}
-              className="inline-flex items-center rounded-full bg-secondary px-2 py-0.5 text-xs text-secondary-foreground"
-            >
-              <Check className="mr-1 h-3 w-3 text-primary" />
-              {benefit}
-            </span>
-          ))}
-        </div>
+        {product.benefits.length > 0 && (
+          <div className="mt-4 flex flex-wrap gap-1.5">
+            {product.benefits.slice(0, 3).map((benefit) => (
+              <span
+                key={benefit}
+                className="inline-flex items-center rounded-full bg-secondary px-2 py-0.5 text-xs text-secondary-foreground"
+              >
+                <Check className="mr-1 h-3 w-3 text-primary" />
+                {benefit}
+              </span>
+            ))}
+          </div>
+        )}
 
         {/* Price & Add to Cart */}
         <div className="mt-auto flex items-end justify-between pt-6">
           <div>
-            <span className="text-2xl font-bold text-foreground">
-              ${product.price.toLocaleString()} MXN
-            </span>
-            {product.originalPrice && (
-              <span className="ml-2 text-sm text-muted-foreground line-through">
-                ${product.originalPrice.toLocaleString()} MXN
-              </span>
-            )}
+            <div className="flex flex-col">
+              {hasVipDiscount ? (
+                <>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-bold text-foreground">
+                      ${vipPrice.toLocaleString()} MXN
+                    </span>
+                    <span className="text-sm text-muted-foreground line-through">
+                      ${product.price.toLocaleString()} MXN
+                    </span>
+                  </div>
+                  <span className="mt-1 inline-flex w-fit rounded-full border border-border bg-background px-2 py-0.5 text-[11px] font-medium text-foreground">
+                    Descuento VIP: {vipDiscountPercentage}% aplicado
+                  </span>
+                </>
+              ) : (
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-bold text-foreground">
+                    ${product.price.toLocaleString()} MXN
+                  </span>
+                  {product.originalPrice && (
+                    <span className="text-sm text-muted-foreground line-through">
+                      ${product.originalPrice.toLocaleString()} MXN
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
           <Button
             size="sm"

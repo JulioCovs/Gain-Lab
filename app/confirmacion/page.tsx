@@ -14,7 +14,7 @@ export default function ConfirmacionPage() {
   const [orderTotal, setOrderTotal] = useState(0)
   const clearCart = useCartStore((state) => state.clearCart)
   const items = useCartStore((state) => state.items)
-  const total = useCartStore((state) => state.total)
+  const getTotal = useCartStore((state) => state.getTotal)
 
   useEffect(() => {
     // Capture cart data before clearing
@@ -24,7 +24,7 @@ export default function ConfirmacionPage() {
         quantity: item.quantity,
         price: item.product.price
       })))
-      setOrderTotal(total())
+      setOrderTotal(getTotal())
       clearCart()
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps

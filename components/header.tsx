@@ -11,6 +11,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { useCartStore } from "@/lib/cart-store"
 import type { Category } from "@/lib/store-data"
 import { supabase } from "@/lib/supabase"
+import { useVipDiscountStore } from "@/lib/vip-discount-store"
 import { CartDrawer } from "./cart-drawer"
 
 // Short names for navigation
@@ -32,6 +33,10 @@ export function Header() {
   const [user, setUser] = useState<User | null>(null)
   const [firstName, setFirstName] = useState("")
   const itemCount = useCartStore((state) => state.getItemCount())
+  const repriceAll = useCartStore((state) => state.repriceAll)
+  const vipDiscountPercentage = useVipDiscountStore((s) => s.discountPercentage)
+  const refreshVipForEmail = useVipDiscountStore((s) => s.refreshForEmail)
+  const clearVip = useVipDiscountStore((s) => s.clear)
   const isAdmin = user?.email ? ADMIN_EMAILS.has(user.email) : false
   const activeCategory = searchParams.get("category")
 
@@ -70,8 +75,10 @@ export function Header() {
 
       if (user) {
         await loadProfileName(user.id, user.user_metadata?.first_name as string | undefined)
+        await refreshVipForEmail(user.email)
       } else {
         setFirstName("")
+        clearVip()
       }
     }
 
@@ -88,8 +95,10 @@ export function Header() {
           sessionUser.id,
           sessionUser.user_metadata?.first_name as string | undefined
         )
+        await refreshVipForEmail(sessionUser.email)
       } else {
         setFirstName("")
+        clearVip()
       }
     })
 
@@ -97,6 +106,10 @@ export function Header() {
       subscription.unsubscribe()
     }
   }, [])
+
+  useEffect(() => {
+    repriceAll(vipDiscountPercentage)
+  }, [vipDiscountPercentage, repriceAll])
 
   useEffect(() => {
     const openDrawerOnAdd = () => setCartOpen(true)

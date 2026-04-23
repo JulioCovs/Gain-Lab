@@ -26,6 +26,67 @@ function ProductGridSkeleton() {
   )
 }
 
+function isValidCategory(value: unknown): value is Category {
+  if (typeof value !== "string") return false
+  return categories.some((c) => c.id === value)
+}
+
+function normalizeCategoryName(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+function resolveCategoryId(categoryIdRaw: unknown, categoryNameRaw: unknown): Category {
+  const defaultCategory = categories[0]?.id ?? ("rendimiento" as Category)
+
+  // If it already matches our local ids, use it.
+  if (isValidCategory(categoryIdRaw)) return categoryIdRaw
+
+  // Try mapping by category name from Supabase join: categories(name)
+  const name = typeof categoryNameRaw === "string" ? normalizeCategoryName(categoryNameRaw) : ""
+  if (name) {
+    const mapped =
+      categories.find((c) => normalizeCategoryName(c.name) === name)?.id ??
+      categories.find((c) => normalizeCategoryName(c.id) === name)?.id ??
+      null
+    if (mapped) return mapped
+  }
+
+  return defaultCategory
+}
+
+function mapDbProductToStoreProduct(row: Record<string, unknown>): Product | null {
+  const id = String(row?.id ?? "").trim()
+  const name = String(row?.name ?? "").trim()
+  const description = String(row?.description ?? "").trim()
+  const price = Number(row?.price ?? 0)
+  const stock = Number(row?.stock ?? 0)
+  const imageUrl = String(row?.image_url ?? row?.imageUrl ?? "/placeholder.png").trim()
+  const categoryIdRaw = row?.category_id ?? row?.categoryId ?? ""
+  const categoryNameRaw = (row as any)?.categories?.name ?? (row as any)?.category?.name ?? null
+
+  if (!id || !name || !Number.isFinite(price)) return null
+
+  const category: Category = resolveCategoryId(categoryIdRaw, categoryNameRaw)
+
+  return {
+    id,
+    name,
+    slug: id,
+    category,
+    goals: [],
+    price,
+    description,
+    benefits: [],
+    stock: Number.isFinite(stock) ? stock : 0,
+    image: imageUrl || "/placeholder.png",
+  }
+}
+
 export function ProductGrid() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -38,29 +99,48 @@ export function ProductGrid() {
     const fetchProducts = async () => {
       setLoading(true)
 
-      const { data, error } = await supabase
+      const { data, error: dbError } = await supabase
         .from("products")
-        .select("*")
+        .select("*, categories(name)")
         .gt("stock", 0)
 
-      if (error) {
-        console.error("Error loading products from Supabase:", error.message)
-        setProducts([])
-        setLoading(false)
-        return
+      if (dbError) {
+        const message = typeof dbError === 'object' ? JSON.stringify(dbError) : String(dbError);
+        console.warn("Detalle del error:", message);
+        setProducts([]);
+        setLoading(false);
+        return;
       }
 
-      setProducts((data ?? []) as Product[])
+      const mapped = (data ?? [])
+        .map((row) => mapDbProductToStoreProduct(row as any))
+        .filter((p): p is Product => p !== null)
+      setProducts(mapped)
       setLoading(false)
     }
 
-    fetchProducts()
+    void fetchProducts()
+
+    const channel = supabase
+      .channel("products-storefront")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "products" },
+        () => {
+          // Re-fetch so the UI reflects admin saves instantly.
+          void fetchProducts()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [])
 
   useEffect(() => {
     const queryCategory = searchParams.get("category")
-    const isValidCategory = categories.some((category) => category.id === queryCategory)
-    setSelectedCategory(isValidCategory ? (queryCategory as Category) : null)
+    setSelectedCategory(isValidCategory(queryCategory) ? (queryCategory as Category) : null)
   }, [searchParams])
 
   useEffect(() => {
@@ -84,6 +164,7 @@ export function ProductGrid() {
     const matchesCategory = !selectedCategory || product.category === selectedCategory
     const matchesGoals =
       selectedGoals.length === 0 ||
+      product.goals.length === 0 ||
       selectedGoals.some((goal) => product.goals.includes(goal))
 
     return matchesCategory && matchesGoals
