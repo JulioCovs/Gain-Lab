@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { useSearchParams } from "next/navigation"
 import { FormEvent, useState } from "react"
 import { Dumbbell, Instagram, Twitter } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -19,6 +20,16 @@ export function Footer() {
   const [email, setEmail] = useState("")
   const [submitted, setSubmitted] = useState(false)
   const [storedEmail, setStoredEmail] = useState("")
+  const searchParams = useSearchParams()
+  const activeCategory = searchParams.get("category")
+
+  // Keep highlight consistent with Header when navigating from footer.
+  // This avoids bringing in routing hooks just for styling.
+  const handleCategoryClick = (categoryId: string) => {
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: "smooth" })
+    })
+  }
 
   const handleNewsletterSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -113,7 +124,10 @@ export function Footer() {
                 <li key={category.id}>
                   <Link
                     href={`/?category=${category.id}`}
-                    className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+                    onClick={() => handleCategoryClick(category.id)}
+                    className={`text-sm transition-colors hover:text-foreground ${
+                      activeCategory === category.id ? "text-[#E31B23]" : "text-muted-foreground"
+                    }`}
                   >
                     {category.name}
                   </Link>

@@ -122,11 +122,14 @@ export function Header() {
     params.set("category", categoryId)
 
     if (pathname === "/") {
-      router.replace(`/?${params.toString()}`, { scroll: false })
+      router.replace(`/?${params.toString()}`)
     } else {
       router.push(`/?${params.toString()}`)
     }
 
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: "smooth" })
+    })
     setIsOpen(false)
   }
 
@@ -136,11 +139,14 @@ export function Header() {
     const nextQuery = params.toString()
 
     if (pathname === "/") {
-      router.replace(nextQuery ? `/?${nextQuery}` : "/", { scroll: false })
+      router.replace(nextQuery ? `/?${nextQuery}` : "/")
     } else {
       router.push(nextQuery ? `/?${nextQuery}` : "/")
     }
 
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: "smooth" })
+    })
     setIsOpen(false)
   }
 
@@ -161,7 +167,7 @@ export function Header() {
             type="button"
             onClick={handleShowAll}
             className={`text-sm font-semibold uppercase tracking-wide transition-colors ${
-              !activeCategory ? "text-primary" : "text-[#000000] hover:text-primary"
+              !activeCategory ? "text-[#E31B23]" : "text-[#000000] hover:text-[#E31B23]"
             }`}
           >
             Inicio
@@ -172,7 +178,7 @@ export function Header() {
               type="button"
               onClick={() => handleCategorySelect(category.id as Category)}
               className={`text-sm font-semibold uppercase tracking-wide transition-colors ${
-                activeCategory === category.id ? "text-primary" : "text-[#000000] hover:text-primary"
+                activeCategory === category.id ? "text-[#E31B23]" : "text-[#000000] hover:text-[#E31B23]"
               }`}
             >
               {category.shortName}
@@ -254,7 +260,7 @@ export function Header() {
                   <button
                     type="button"
                     className={`rounded-xl px-4 py-3 text-left text-base font-semibold uppercase tracking-wide transition-colors ${
-                      !activeCategory ? "bg-primary/10 text-primary" : "text-[#000000] hover:bg-black/5"
+                      !activeCategory ? "bg-[#E31B23]/10 text-[#E31B23]" : "text-[#000000] hover:bg-black/5"
                     }`}
                     onClick={handleShowAll}
                   >
@@ -266,7 +272,7 @@ export function Header() {
                       type="button"
                       className={`rounded-xl px-4 py-3 text-left text-base font-semibold uppercase tracking-wide transition-colors ${
                         activeCategory === category.id
-                          ? "bg-primary/10 text-primary"
+                          ? "bg-[#E31B23]/10 text-[#E31B23]"
                           : "text-[#000000] hover:bg-black/5"
                       }`}
                       onClick={() => handleCategorySelect(category.id as Category)}

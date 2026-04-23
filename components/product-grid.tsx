@@ -95,6 +95,28 @@ export function ProductGrid() {
   const [selectedGoals, setSelectedGoals] = useState<Goal[]>([])
   const [loading, setLoading] = useState(true)
 
+  const handleCategoryChange = (category: Category | null) => {
+    const currentCategory = searchParams.get("category")
+    const nextCategory = category ?? null
+
+    // Strict compare: if URL already matches desired state, do nothing.
+    if ((currentCategory ?? null) === nextCategory) {
+      setSelectedCategory(category)
+      return
+    }
+
+    const params = new URLSearchParams(searchParams.toString())
+    if (category) {
+      params.set("category", category)
+    } else {
+      params.delete("category")
+    }
+
+    const nextQuery = params.toString()
+    router.push(nextQuery ? `/?${nextQuery}` : "/")
+    setSelectedCategory(category)
+  }
+
   useEffect(() => {
     const fetchProducts = async () => {
       setLoading(true)
@@ -143,20 +165,6 @@ export function ProductGrid() {
     setSelectedCategory(isValidCategory(queryCategory) ? (queryCategory as Category) : null)
   }, [searchParams])
 
-  useEffect(() => {
-    const params = new URLSearchParams(searchParams.toString())
-    if (selectedCategory) {
-      params.set("category", selectedCategory)
-    } else {
-      params.delete("category")
-    }
-    const nextCategory = params.get("category")
-    const currentCategory = searchParams.get("category")
-    if (nextCategory !== currentCategory) {
-      router.replace(params.toString() ? `/?${params.toString()}` : "/", { scroll: false })
-    }
-  }, [selectedCategory, router, searchParams])
-
   const filteredProducts = products.filter((product) => {
     // Exclude bundles from regular grid
     if (product.isBundle || product.stock <= 0) return false
@@ -189,7 +197,7 @@ export function ProductGrid() {
       <FilterBar
         selectedCategory={selectedCategory}
         selectedGoals={selectedGoals}
-        onCategoryChange={setSelectedCategory}
+        onCategoryChange={handleCategoryChange}
         onGoalsChange={setSelectedGoals}
       />
 
