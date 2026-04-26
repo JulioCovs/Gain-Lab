@@ -3,11 +3,15 @@
 import Link from "next/link"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Heart, Loader2 } from "lucide-react"
+import { ArrowLeft, Heart } from "lucide-react"
 import { ProductCard } from "@/components/product-card"
+import { LabLoader } from "@/components/lab-loader"
 import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabase"
 import { categories, type Category, type Product } from "@/lib/store-data"
+
+const MIN_LAB_LOADER_MS = 2000
+const LAB_FADE_OUT_MS = 500
 
 function isValidCategory(value: unknown): value is Category {
   if (typeof value !== "string") return false
@@ -41,11 +45,27 @@ function normalizeDbProduct(row: Record<string, unknown>): Product | null {
 export default function PerfilFavoritosPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
+  const [showLabLoader, setShowLabLoader] = useState(true)
+  const [readyToRender, setReadyToRender] = useState(false)
   const [favoriteProducts, setFavoriteProducts] = useState<Product[]>([])
+
+  useEffect(() => {
+    if (loading) {
+      setShowLabLoader(true)
+      setReadyToRender(false)
+      return
+    }
+    const timeoutId = window.setTimeout(() => {
+      setShowLabLoader(false)
+      setReadyToRender(true)
+    }, LAB_FADE_OUT_MS)
+    return () => window.clearTimeout(timeoutId)
+  }, [loading])
 
   useEffect(() => {
     const loadFavorites = async () => {
       setLoading(true)
+      const loaderStartAt = Date.now()
 
       const {
         data: { session },
@@ -53,6 +73,11 @@ export default function PerfilFavoritosPage() {
 
       const userId = session?.user?.id ?? null
       if (!userId) {
+        const elapsed = Date.now() - loaderStartAt
+        if (elapsed < MIN_LAB_LOADER_MS) {
+          await new Promise((resolve) => window.setTimeout(resolve, MIN_LAB_LOADER_MS - elapsed))
+        }
+        setLoading(false)
         router.push("/auth")
         return
       }
@@ -61,6 +86,10 @@ export default function PerfilFavoritosPage() {
       if (favoritesResult.error) {
         console.warn("No se pudieron obtener favoritos:", favoritesResult.error.message)
         setFavoriteProducts([])
+        const elapsed = Date.now() - loaderStartAt
+        if (elapsed < MIN_LAB_LOADER_MS) {
+          await new Promise((resolve) => window.setTimeout(resolve, MIN_LAB_LOADER_MS - elapsed))
+        }
         setLoading(false)
         return
       }
@@ -71,6 +100,10 @@ export default function PerfilFavoritosPage() {
 
       if (productIds.length === 0) {
         setFavoriteProducts([])
+        const elapsed = Date.now() - loaderStartAt
+        if (elapsed < MIN_LAB_LOADER_MS) {
+          await new Promise((resolve) => window.setTimeout(resolve, MIN_LAB_LOADER_MS - elapsed))
+        }
         setLoading(false)
         return
       }
@@ -79,6 +112,10 @@ export default function PerfilFavoritosPage() {
       if (productsResult.error) {
         console.warn("No se pudieron obtener productos favoritos:", productsResult.error.message)
         setFavoriteProducts([])
+        const elapsed = Date.now() - loaderStartAt
+        if (elapsed < MIN_LAB_LOADER_MS) {
+          await new Promise((resolve) => window.setTimeout(resolve, MIN_LAB_LOADER_MS - elapsed))
+        }
         setLoading(false)
         return
       }
@@ -94,6 +131,10 @@ export default function PerfilFavoritosPage() {
       const orderedProducts = productIds.map((id) => byId.get(id)).filter((product): product is Product => Boolean(product))
 
       setFavoriteProducts(orderedProducts)
+      const elapsed = Date.now() - loaderStartAt
+      if (elapsed < MIN_LAB_LOADER_MS) {
+        await new Promise((resolve) => window.setTimeout(resolve, MIN_LAB_LOADER_MS - elapsed))
+      }
       setLoading(false)
     }
 
@@ -121,12 +162,9 @@ export default function PerfilFavoritosPage() {
         </Link>
       </div>
 
-      {loading ? (
-        <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-6 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Cargando favoritos...
-        </div>
-      ) : favoriteProducts.length === 0 ? (
+      <LabLoader active={showLabLoader || loading} />
+
+      {readyToRender && favoriteProducts.length === 0 ? (
         <div className="rounded-xl border border-border bg-card px-6 py-10 text-center">
           <Heart className="mx-auto h-10 w-10 text-gray-400" />
           <p className="mt-3 text-base font-medium text-foreground">Aún no tienes favoritos guardados.</p>
@@ -137,13 +175,13 @@ export default function PerfilFavoritosPage() {
             <Button>Explorar productos</Button>
           </Link>
         </div>
-      ) : (
+      ) : readyToRender ? (
         <section className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {favoriteProducts.map((product) => (
             <ProductCard key={product.id} product={product} />
           ))}
         </section>
-      )}
+      ) : null}
     </main>
   )
 }

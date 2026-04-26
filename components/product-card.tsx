@@ -25,6 +25,7 @@ export function ProductCard({ product }: ProductCardProps) {
   const [userId, setUserId] = useState<string | null>(null)
   const [isFavorite, setIsFavorite] = useState(false)
   const [favoriteBusy, setFavoriteBusy] = useState(false)
+  const [imageLoaded, setImageLoaded] = useState(false)
   const vipDiscountPercentage = useVipDiscountStore((s) => s.discountPercentage)
   const hasVipDiscount = vipDiscountPercentage > 0
   const vipPrice = hasVipDiscount ? applyPercentageDiscount(product.price, vipDiscountPercentage) : product.price
@@ -85,6 +86,10 @@ export function ProductCard({ product }: ProductCardProps) {
       subscription.unsubscribe()
     }
   }, [product.id])
+
+  useEffect(() => {
+    setImageLoaded(false)
+  }, [product.id, product.image])
 
   useEffect(() => {
     let timeoutId: number | undefined
@@ -181,9 +186,13 @@ export function ProductCard({ product }: ProductCardProps) {
         <img
           src={product.image}
           alt={`${product.name} suplemento premium Gain Lab`}
-          className="h-full w-full object-cover"
+          className={`h-full w-full object-cover transition-opacity duration-300 ${
+            imageLoaded ? "opacity-100" : "opacity-0"
+          }`}
           loading="lazy"
+          onLoad={() => setImageLoaded(true)}
         />
+        {!imageLoaded && <div className="absolute inset-0 animate-pulse rounded-none bg-muted" />}
         <button
           type="button"
           aria-label={isFavorite ? "Quitar de favoritos" : "Guardar en favoritos"}

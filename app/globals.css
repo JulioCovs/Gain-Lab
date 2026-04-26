@@ -159,3 +159,64 @@
 ::-webkit-scrollbar-thumb:hover {
   background: oklch(0.70 0 0);
 }
+
+.lab-liquid {
+  fill: rgb(37 99 235);
+  transform: translateY(106px);
+  animation: lab-fill var(--lab-duration, 1800ms) ease-out forwards;
+}
+
+.lab-wave {
+  fill: rgb(59 130 246 / 85%);
+  transform: translateY(108px);
+  animation:
+    lab-fill var(--lab-duration, 1800ms) ease-out forwards,
+    lab-wave 1200ms ease-in-out infinite;
+}
+
+.lab-bubble {
+  fill: rgba(255, 255, 255, 0.9);
+  transform: translateY(110px);
+  animation:
+    lab-fill var(--lab-duration, 1800ms) ease-out forwards,
+    bubble-rise 1.1s ease-in-out infinite;
+}
+
+.bubble-2 {
+  animation-delay: 0.4s;
+}
+
+.bubble-3 {
+  animation-delay: 0.8s;
+}
+
+@keyframes lab-fill {
+  0% {
+    transform: translateY(112px);
+  }
+  100% {
+    transform: translateY(6px);
+  }
+}
+
+@keyframes lab-wave {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(-8px);
+  }
+}
+
+@keyframes bubble-rise {
+  0% {
+    opacity: 0.1;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.1;
+  }
+}

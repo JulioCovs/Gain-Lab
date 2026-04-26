@@ -5,26 +5,12 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { ProductCard } from "./product-card"
 import { FilterBar } from "./filter-bar"
 import { BundleBanner } from "./bundle-banner"
+import { LabLoader } from "./lab-loader"
 import { supabase } from "@/lib/supabase"
 import { categories, type Category, type Goal, type Product } from "@/lib/store-data"
 
-function ProductGridSkeleton() {
-  return (
-    <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-      {Array.from({ length: 6 }).map((_, idx) => (
-        <div key={idx} className="overflow-hidden rounded-2xl border border-border/80 bg-card">
-          <div className="aspect-square animate-pulse bg-muted" />
-          <div className="space-y-3 p-6">
-            <div className="h-5 w-3/4 animate-pulse rounded bg-muted" />
-            <div className="h-4 w-full animate-pulse rounded bg-muted" />
-            <div className="h-4 w-5/6 animate-pulse rounded bg-muted" />
-            <div className="h-9 w-full animate-pulse rounded bg-muted" />
-          </div>
-        </div>
-      ))}
-    </div>
-  )
-}
+const MIN_LAB_LOADER_MS = 2000
+const LAB_FADE_OUT_MS = 500
 
 function isValidCategory(value: unknown): value is Category {
   if (typeof value !== "string") return false
@@ -93,7 +79,22 @@ export function ProductGrid() {
   const [products, setProducts] = useState<Product[]>([])
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null)
   const [selectedGoals, setSelectedGoals] = useState<Goal[]>([])
-  const [loading, setLoading] = useState(true)
+  const [isDataLoading, setIsDataLoading] = useState(true)
+  const [showLabLoader, setShowLabLoader] = useState(true)
+  const [readyToRenderStore, setReadyToRenderStore] = useState(false)
+
+  useEffect(() => {
+    if (isDataLoading) {
+      setShowLabLoader(true)
+      setReadyToRenderStore(false)
+      return
+    }
+    const timeoutId = window.setTimeout(() => {
+      setShowLabLoader(false)
+      setReadyToRenderStore(true)
+    }, LAB_FADE_OUT_MS)
+    return () => window.clearTimeout(timeoutId)
+  }, [isDataLoading])
 
   const handleCategoryChange = (category: Category | null) => {
     const currentCategory = searchParams.get("category")
@@ -119,7 +120,8 @@ export function ProductGrid() {
 
   useEffect(() => {
     const fetchProducts = async () => {
-      setLoading(true)
+      setIsDataLoading(true)
+      const loaderStartAt = Date.now()
 
       let { data, error: dbError } = await supabase
         .from("products")
@@ -136,8 +138,12 @@ export function ProductGrid() {
       if (dbError) {
         const message = typeof dbError === "object" ? JSON.stringify(dbError) : String(dbError)
         console.warn("Detalle del error:", message)
+        const elapsed = Date.now() - loaderStartAt
+        if (elapsed < MIN_LAB_LOADER_MS) {
+          await new Promise((resolve) => window.setTimeout(resolve, MIN_LAB_LOADER_MS - elapsed))
+        }
         setProducts([])
-        setLoading(false)
+        setIsDataLoading(false)
         return
       }
 
@@ -145,7 +151,11 @@ export function ProductGrid() {
         .map((row) => mapDbProductToStoreProduct(row as any))
         .filter((p): p is Product => p !== null)
       setProducts(mapped)
-      setLoading(false)
+      const elapsed = Date.now() - loaderStartAt
+      if (elapsed < MIN_LAB_LOADER_MS) {
+        await new Promise((resolve) => window.setTimeout(resolve, MIN_LAB_LOADER_MS - elapsed))
+      }
+      setIsDataLoading(false)
     }
 
     void fetchProducts()
@@ -210,9 +220,9 @@ export function ProductGrid() {
 
       {/* Products by Category */}
       <div className="mx-auto max-w-7xl px-4 py-12 lg:px-8">
-        {loading && <ProductGridSkeleton />}
+        <LabLoader active={showLabLoader || isDataLoading} />
 
-        {!loading &&
+        {readyToRenderStore &&
           Object.entries(groupedProducts).map(([categoryId, categoryProducts]) => {
             const category = categories.find((c) => c.id === categoryId)
             if (!category || categoryProducts.length === 0) return null
@@ -235,7 +245,7 @@ export function ProductGrid() {
             )
           })}
 
-        {!loading && selectedCategory && filteredProducts.length === 0 && (
+        {readyToRenderStore && selectedCategory && filteredProducts.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <p className="max-w-xl text-lg text-muted-foreground">
               Próximamente más stock en esta categoría. Explora otros suplementos.
@@ -243,7 +253,7 @@ export function ProductGrid() {
           </div>
         )}
 
-        {!loading && !selectedCategory && filteredProducts.length === 0 && (
+        {readyToRenderStore && !selectedCategory && filteredProducts.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <p className="text-lg text-muted-foreground">
               No se encontraron productos con los filtros seleccionados
