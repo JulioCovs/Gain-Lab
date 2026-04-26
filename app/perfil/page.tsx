@@ -498,44 +498,50 @@ export default function PerfilPage() {
             </CardContent>
           </Card>
 
-          <Card className="border-0 bg-white shadow-sm">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Heart className="h-5 w-5" />
-                Mis Favoritos
-              </CardTitle>
-              <CardDescription>Productos guardados para volver rápido.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {loadingData ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700" />
-                  Cargando favoritos...
-                </div>
-              ) : favorites.length > 0 ? (
-                favorites.map((product) => (
-                  <div
-                    key={product?.id}
-                    className="flex items-center justify-between rounded-lg border border-slate-200 p-3"
-                  >
-                    <div>
-                      <p className="text-sm font-semibold">{product?.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        ${product?.price.toLocaleString()} MXN
-                      </p>
-                    </div>
-                    <Heart className="h-4 w-4 fill-red-500 text-red-500" />
+          <Link href="/perfil/favoritos" className="block">
+            <Card className="border-0 bg-white shadow-sm transition-shadow hover:shadow-md">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Heart className="h-5 w-5 text-red-600" />
+                  Mis Favoritos
+                </CardTitle>
+                <CardDescription>
+                  {loadingData
+                    ? "Cargando favoritos..."
+                    : favorites.length > 0
+                      ? `Tienes ${favorites.length} producto(s) guardado(s).`
+                      : "Tu lista de favoritos está vacía. Guarda los suplementos que más te gusten aquí."}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {loadingData ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700" />
+                    Cargando favoritos...
                   </div>
-                ))
-              ) : (
-                <div className="rounded-lg border border-dashed border-slate-300 p-4">
-                  <p className="text-sm text-muted-foreground">
-                    Tu lista de favoritos está vacía. Guarda los suplementos que más te gusten aquí
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                ) : favorites.length > 0 ? (
+                  favorites.slice(0, 3).map((product) => (
+                    <div
+                      key={product?.id}
+                      className="flex items-center justify-between rounded-lg border border-slate-200 p-3"
+                    >
+                      <div>
+                        <p className="text-sm font-semibold">{product?.name}</p>
+                        <p className="text-xs text-muted-foreground">${product?.price.toLocaleString()} MXN</p>
+                      </div>
+                      <Heart className="h-4 w-4 fill-red-600 text-red-600" />
+                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-lg border border-dashed border-slate-300 p-4">
+                    <p className="text-sm text-muted-foreground">
+                      Tu lista de favoritos está vacía. Guarda los suplementos que más te gusten aquí
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </Link>
         </div>
       </div>
     </div>
