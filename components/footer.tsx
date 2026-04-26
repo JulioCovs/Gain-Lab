@@ -100,19 +100,19 @@ export function Footer() {
             </p>
             <div className="mt-4 flex gap-4">
               <a
-                href="#"
+                href="https://www.instagram.com/gain_lab_"
                 className="text-slate-300 transition-colors hover:text-white"
                 aria-label="Instagram"
               >
                 <Instagram className="h-5 w-5" />
               </a>
-              <a
+             {/*<a
                 href="#"
                 className="text-slate-300 transition-colors hover:text-white"
                 aria-label="Twitter"
               >
                 <Twitter className="h-5 w-5" />
-              </a>
+              </a>*/}
             </div>
           </div>
 
