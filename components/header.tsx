@@ -151,12 +151,12 @@ export function Header() {
   }
 
   return (
-    <header className="sticky top-0 z-50 w-full bg-[#F5F5F7]">
+    <header className="sticky top-0 z-50 w-full border-b border-slate-800 bg-slate-900">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 lg:px-8">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2">
           <Dumbbell className="h-7 w-7 text-primary" />
-          <span className="text-xl font-black tracking-tighter uppercase text-foreground">
+          <span className="text-xl font-black tracking-tighter uppercase text-slate-100">
             GAIN <span className="text-primary">LAB</span>
           </span>
         </Link>
@@ -167,7 +167,7 @@ export function Header() {
             type="button"
             onClick={handleShowAll}
             className={`text-sm font-semibold uppercase tracking-wide transition-colors ${
-              !activeCategory ? "text-[#E31B23]" : "text-[#000000] hover:text-[#E31B23]"
+              !activeCategory ? "text-sky-300" : "text-slate-100 hover:text-sky-300"
             }`}
           >
             Inicio
@@ -178,7 +178,7 @@ export function Header() {
               type="button"
               onClick={() => handleCategorySelect(category.id as Category)}
               className={`text-sm font-semibold uppercase tracking-wide transition-colors ${
-                activeCategory === category.id ? "text-[#E31B23]" : "text-[#000000] hover:text-[#E31B23]"
+                activeCategory === category.id ? "text-sky-300" : "text-slate-100 hover:text-sky-300"
               }`}
             >
               {category.shortName}
@@ -193,7 +193,7 @@ export function Header() {
             <Link href="/perfil" className="hidden md:block">
               <Button
                 variant="ghost"
-                className="max-w-[180px] gap-2 text-[#000000] hover:text-[#000000] hover:bg-black/5"
+                className="max-w-[180px] gap-2 text-slate-100 hover:text-slate-100 hover:bg-slate-800"
               >
                 <UserIcon className="h-5 w-5" />
                 <span className="truncate text-sm font-medium">
@@ -205,7 +205,7 @@ export function Header() {
             <Link href="/auth" className="hidden md:block">
               <Button
                 variant="ghost"
-                className="text-[#000000] hover:text-[#000000] hover:bg-black/5"
+                className="text-slate-100 hover:text-slate-100 hover:bg-slate-800"
               >
                 Iniciar Sesion
               </Button>
@@ -215,7 +215,7 @@ export function Header() {
           {/* Admin Link - Distinct styling for restricted access */}
           {isAdmin && (
             <Link href="/admin" className="hidden md:block">
-              <Button variant="ghost" size="icon" className="text-[#000000] hover:text-[#000000] hover:bg-black/5">
+              <Button variant="ghost" size="icon" className="text-slate-100 hover:text-slate-100 hover:bg-slate-800">
                 <Shield className="h-5 w-5" />
                 <span className="sr-only">Admin</span>
               </Button>
@@ -226,7 +226,7 @@ export function Header() {
           <Button
             variant="ghost"
             size="icon"
-            className="relative text-[#000000] hover:text-[#000000] hover:bg-black/5"
+            className="relative text-slate-100 hover:text-slate-100 hover:bg-slate-800"
             onClick={() => setCartOpen(true)}
           >
             <ShoppingCart className="h-5 w-5" />
@@ -243,7 +243,7 @@ export function Header() {
           {/* Mobile Menu */}
           <Sheet open={isOpen} onOpenChange={setIsOpen}>
             <SheetTrigger asChild className="md:hidden">
-              <Button variant="ghost" size="icon" className="text-[#000000] hover:text-[#000000] hover:bg-black/5">
+              <Button variant="ghost" size="icon" className="text-slate-100 hover:text-slate-100 hover:bg-slate-800">
                 <Menu className="h-5 w-5" />
                 <span className="sr-only">Menu</span>
               </Button>

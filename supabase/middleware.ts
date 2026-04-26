@@ -27,9 +27,9 @@ export async function getSessionUser(request: NextRequest) {
   })
 
   const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    data: { session },
+  } = await supabase.auth.getSession()
 
-  return { user, response }
+  return { user: session?.user ?? null, response }
 }
 

@@ -43,17 +43,17 @@ export function Footer() {
   }
 
   return (
-    <footer className="border-t border-border bg-card">
+    <footer className="border-t border-slate-800 bg-slate-900 text-slate-100">
       <div className="mx-auto max-w-7xl px-4 py-12 lg:px-8">
-        <div className="mb-10 rounded-2xl border border-border bg-background p-6 lg:p-8">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Mision</p>
-          <p className="mt-3 max-w-5xl text-sm leading-relaxed text-muted-foreground">
+        <div className="mb-10 rounded-2xl border border-slate-700 bg-slate-800/60 p-6 lg:p-8">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">Mision</p>
+          <p className="mt-3 max-w-5xl text-sm leading-relaxed text-slate-200">
             En Gain Lab, nuestra mision es democratizar la suplementacion de alto rendimiento en todo Mexico.
             Disenamos una experiencia de compra inteligente para atletas que no aceptan excusas y buscan
             resultados reales a traves de ciencia y calidad superior.
           </p>
           <div className="mt-5">
-            <p className="mb-3 text-sm text-muted-foreground">
+            <p className="mb-3 text-sm text-slate-300">
               Únete al Laboratorio. Recibe lanzamientos exclusivos y descuentos.
             </p>
             <Dialog>
@@ -95,20 +95,20 @@ export function Footer() {
                 GAIN <span className="text-primary">LAB</span>
               </span>
             </Link>
-            <p className="mt-4 text-sm text-muted-foreground">
+            <p className="mt-4 text-sm text-slate-300">
               Suplementos premium para atletas que exigen lo mejor.
             </p>
             <div className="mt-4 flex gap-4">
               <a
                 href="#"
-                className="text-muted-foreground transition-colors hover:text-foreground"
+                className="text-slate-300 transition-colors hover:text-white"
                 aria-label="Instagram"
               >
                 <Instagram className="h-5 w-5" />
               </a>
               <a
                 href="#"
-                className="text-muted-foreground transition-colors hover:text-foreground"
+                className="text-slate-300 transition-colors hover:text-white"
                 aria-label="Twitter"
               >
                 <Twitter className="h-5 w-5" />
@@ -118,15 +118,15 @@ export function Footer() {
 
           {/* Categories */}
           <div>
-            <h3 className="font-semibold text-foreground">Categorías</h3>
+            <h3 className="font-semibold text-slate-100">Categorías</h3>
             <ul className="mt-4 space-y-3">
               {footerCategories.map((category) => (
                 <li key={category.id}>
                   <Link
                     href={`/?category=${category.id}`}
                     onClick={() => handleCategoryClick(category.id)}
-                    className={`text-sm transition-colors hover:text-foreground ${
-                      activeCategory === category.id ? "text-[#E31B23]" : "text-muted-foreground"
+                    className={`text-sm transition-colors hover:text-white ${
+                      activeCategory === category.id ? "text-sky-300" : "text-slate-300"
                     }`}
                   >
                     {category.name}
@@ -138,12 +138,12 @@ export function Footer() {
 
           {/* Support */}
           <div>
-            <h3 className="font-semibold text-foreground">Soporte</h3>
+            <h3 className="font-semibold text-slate-100">Soporte</h3>
             <ul className="mt-4 space-y-3">
               <li>
                 <Link
                   href="/faqs"
-                  className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+                  className="text-sm text-slate-300 transition-colors hover:text-white"
                 >
                   FAQs
                 </Link>
@@ -151,7 +151,7 @@ export function Footer() {
               <li>
                 <Link
                   href="#"
-                  className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+                  className="text-sm text-slate-300 transition-colors hover:text-white"
                 >
                   Envíos
                 </Link>
@@ -159,7 +159,7 @@ export function Footer() {
               <li>
                 <Link
                   href="#"
-                  className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+                  className="text-sm text-slate-300 transition-colors hover:text-white"
                 >
                   Devoluciones
                 </Link>
@@ -167,7 +167,7 @@ export function Footer() {
               <li>
                 <Link
                   href="#"
-                  className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+                  className="text-sm text-slate-300 transition-colors hover:text-white"
                 >
                   Contacto
                 </Link>
@@ -177,12 +177,12 @@ export function Footer() {
 
           {/* Legal */}
           <div>
-            <h3 className="font-semibold text-foreground">Legal</h3>
+            <h3 className="font-semibold text-slate-100">Legal</h3>
             <ul className="mt-4 space-y-3">
               <li>
                 <Link
                   href="#"
-                  className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+                  className="text-sm text-slate-300 transition-colors hover:text-white"
                 >
                   Términos de uso
                 </Link>
@@ -190,7 +190,7 @@ export function Footer() {
               <li>
                 <Link
                   href="#"
-                  className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+                  className="text-sm text-slate-300 transition-colors hover:text-white"
                 >
                   Política de privacidad
                 </Link>
@@ -198,7 +198,7 @@ export function Footer() {
               <li>
                 <Link
                   href="#"
-                  className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+                  className="text-sm text-slate-300 transition-colors hover:text-white"
                 >
                   Cookies
                 </Link>
@@ -207,8 +207,8 @@ export function Footer() {
           </div>
         </div>
 
-        <div className="mt-12 border-t border-border pt-8">
-          <p className="text-center text-sm text-muted-foreground">
+        <div className="mt-12 border-t border-slate-700 pt-8">
+          <p className="text-center text-sm text-slate-300">
             © {new Date().getFullYear()} GAIN LAB. Todos los derechos reservados.
           </p>
         </div>

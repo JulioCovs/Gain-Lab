@@ -121,17 +121,24 @@ export function ProductGrid() {
     const fetchProducts = async () => {
       setLoading(true)
 
-      const { data, error: dbError } = await supabase
+      let { data, error: dbError } = await supabase
         .from("products")
         .select("*, categories(name)")
         .gt("stock", 0)
 
       if (dbError) {
-        const message = typeof dbError === 'object' ? JSON.stringify(dbError) : String(dbError);
-        console.warn("Detalle del error:", message);
-        setProducts([]);
-        setLoading(false);
-        return;
+        // Fallback: if relation lookup fails, load products without category join.
+        const fallback = await supabase.from("products").select("*").gt("stock", 0)
+        data = fallback.data
+        dbError = fallback.error
+      }
+
+      if (dbError) {
+        const message = typeof dbError === "object" ? JSON.stringify(dbError) : String(dbError)
+        console.warn("Detalle del error:", message)
+        setProducts([])
+        setLoading(false)
+        return
       }
 
       const mapped = (data ?? [])

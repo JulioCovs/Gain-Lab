@@ -6,37 +6,48 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import { useCartStore } from "@/lib/cart-store"
+
+const LAST_ORDER_STORAGE_KEY = "gainlab-last-order"
+
+interface StoredOrderItem {
+  product_id: string
+  name: string
+  quantity: number
+  unit_price: number
+  line_total: number
+}
+
+interface StoredOrderSnapshot {
+  orderNumber: string
+  customerName: string
+  paymentMethod: string
+  total: number
+  items: StoredOrderItem[]
+  createdAt: string
+}
 
 export default function ConfirmacionPage() {
-  const [orderNumber] = useState(() => `GL-${Date.now().toString(36).toUpperCase()}`)
-  const [orderItems, setOrderItems] = useState<{ name: string; quantity: number; price: number }[]>([])
-  const [orderTotal, setOrderTotal] = useState(0)
-  const clearCart = useCartStore((state) => state.clearCart)
-  const items = useCartStore((state) => state.items)
-  const getTotal = useCartStore((state) => state.getTotal)
+  const [order, setOrder] = useState<StoredOrderSnapshot | null>(null)
 
   useEffect(() => {
-    // Capture cart data before clearing
-    if (items.length > 0) {
-      setOrderItems(items.map(item => ({
-        name: item.product.name,
-        quantity: item.quantity,
-        price: item.product.price
-      })))
-      setOrderTotal(getTotal())
-      clearCart()
+    const raw = window.sessionStorage.getItem(LAST_ORDER_STORAGE_KEY)
+    if (!raw) return
+
+    try {
+      const parsed = JSON.parse(raw) as StoredOrderSnapshot
+      const hasItems = Array.isArray(parsed.items) && parsed.items.length > 0
+      const hasTotal = Number(parsed.total) > 0
+      if (hasItems && hasTotal) {
+        setOrder(parsed)
+      }
+    } catch {
+      // Ignore invalid data and render empty state.
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])
 
-  // Demo items if no cart data
-  const displayItems = orderItems.length > 0 ? orderItems : [
-    { name: "Pre-Workout Extreme", quantity: 1, price: 899 },
-    { name: "Whey Protein Isolate", quantity: 2, price: 1099 },
-    { name: "Creatina Monohidrato", quantity: 1, price: 599 }
-  ]
-
-  const displayTotal = orderTotal > 0 ? orderTotal : displayItems.reduce((sum, item) => sum + (item.price * item.quantity), 0)
+  const displayItems = order?.items ?? []
+  const displayTotal = order?.total ?? 0
+  const orderNumber = order?.orderNumber ?? "SIN-REFERENCIA"
 
   const whatsappMessage = encodeURIComponent(
     `Hola! Acabo de realizar mi pedido #${orderNumber} en GAIN LAB por un total de $${displayTotal.toLocaleString()} MXN. Me gustaría confirmar los detalles de mi envío.`
@@ -86,7 +97,23 @@ export default function ConfirmacionPage() {
             <p className="text-muted-foreground">
               Tu pedido ha sido procesado correctamente
             </p>
+            {order?.customerName && (
+              <p className="mt-2 text-sm font-medium text-foreground">
+                {`Gracias por tu compra, ${order.customerName}!`}
+              </p>
+            )}
           </div>
+
+          {order?.paymentMethod === "Transferencia SPEI" && (
+            <Card className="mb-6 border-primary/40 bg-primary/5 shadow-md shadow-primary/10">
+              <CardContent className="space-y-1 p-4">
+                <p className="text-sm font-semibold text-primary">Datos para Transferencia SPEI</p>
+                <p className="text-sm">Banco: Nu Mexico</p>
+                <p className="text-sm">CLABE: 638180000180998285</p>
+                <p className="text-sm">Nombre: Julio Covarrubias</p>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Order Summary Card */}
           <Card className="border-border/50 bg-card/80 backdrop-blur-xl shadow-2xl shadow-primary/5 mb-6">
@@ -103,21 +130,25 @@ export default function ConfirmacionPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Items */}
-              <div className="space-y-3">
-                {displayItems.map((item, index) => (
-                  <div key={index} className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-lg bg-secondary/50 flex items-center justify-center">
-                        <span className="text-xs font-bold text-primary">{item.quantity}x</span>
+              {displayItems.length > 0 ? (
+                <div className="space-y-3">
+                  {displayItems.map((item, index) => (
+                    <div key={`${item.product_id}-${index}`} className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-lg bg-secondary/50 flex items-center justify-center">
+                          <span className="text-xs font-bold text-primary">{item.quantity}x</span>
+                        </div>
+                        <span className="text-sm font-medium">{item.name}</span>
                       </div>
-                      <span className="text-sm font-medium">{item.name}</span>
+                      <span className="text-sm font-semibold">${item.line_total.toLocaleString()} MXN</span>
                     </div>
-                    <span className="text-sm font-semibold">
-                      ${(item.price * item.quantity).toLocaleString()} MXN
-                    </span>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-lg border border-border/50 bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+                  No hay productos para mostrar en este pedido.
+                </div>
+              )}
 
               <Separator className="bg-border/50" />
 

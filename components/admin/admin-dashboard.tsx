@@ -45,6 +45,7 @@ import { StatsCard } from "./stats-card"
 
 const LOW_STOCK_THRESHOLD = 10
 const ADMIN_EMAILS = new Set(["juliocov@icloud.com", "juancajurs@gmail.com"])
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 type SalesMetrics = {
   grossSalesMxn: number | null
@@ -319,10 +320,13 @@ export function AdminDashboard() {
         setDashboardError((prev) => prev ?? errorMessage)
       } else {
         const row = ((salesMetricsUnwrapped as any).data ?? null) as Record<string, unknown> | null
+        const grossRevenueRaw = row?.gross_revenue ?? row?.gross_sales_mxn ?? null
+        const netRevenueRaw = row?.net_revenue ?? row?.net_sales_mxn ?? null
+        const totalOrdersRaw = row?.total_orders ?? null
         setSalesMetrics({
-          grossSalesMxn: row?.gross_sales_mxn != null ? Number(row.gross_sales_mxn) : null,
-          netSalesMxn: row?.net_sales_mxn != null ? Number(row.net_sales_mxn) : null,
-          totalOrders: row?.total_orders != null ? Number(row.total_orders) : null,
+          grossSalesMxn: grossRevenueRaw != null ? Number(grossRevenueRaw) : null,
+          netSalesMxn: netRevenueRaw != null ? Number(netRevenueRaw) : null,
+          totalOrders: totalOrdersRaw != null ? Number(totalOrdersRaw) : null,
         })
       }
     } catch (err) {
@@ -357,18 +361,32 @@ export function AdminDashboard() {
     setSavingProduct(true)
     setFormError(null)
 
+    const rawCategoryId = form.categoryId.trim()
+    const defaultCategoryId = categories[0]?.id ?? null
+    const categoryExists = rawCategoryId
+      ? categories.some((category) => category.id === rawCategoryId)
+      : false
+    const categoryLooksLikeUuid = rawCategoryId ? UUID_REGEX.test(rawCategoryId) : false
+    const normalizedCategoryId = categoryExists && categoryLooksLikeUuid ? rawCategoryId : defaultCategoryId
+
+    if (rawCategoryId && (!categoryExists || !categoryLooksLikeUuid)) {
+      setSavingProduct(false)
+      setFormError("La categoría seleccionada no es válida. Selecciona una categoría existente.")
+      return
+    }
+
     const payload = {
       name: form.name.trim(),
       description: form.description.trim(),
-      categoryId: form.categoryId.trim(),
+      category_id: normalizedCategoryId,
       price: Number(form.price),
       stock: Number(form.stock),
       imageUrl: form.imageUrl.trim() || null,
     }
 
-    if (!payload.name || !payload.categoryId) {
+    if (!payload.name) {
       setSavingProduct(false)
-      setFormError("Completa nombre y categoría.")
+      setFormError("Completa nombre del producto.")
       return
     }
 
@@ -381,7 +399,7 @@ export function AdminDashboard() {
     const performInsertOrUpdate = async (columnSet: {
       name: string
       description: string
-      categoryId: string
+      category_id: string | null
       price: number
       stock: number
       imageUrl: string | null
@@ -390,7 +408,7 @@ export function AdminDashboard() {
       const data: Record<string, unknown> = {
         name: columnSet.name,
         description: columnSet.description,
-        category_id: columnSet.categoryId,
+        category_id: columnSet.category_id,
         price: columnSet.price,
         stock: columnSet.stock,
         image_url: columnSet.imageUrl,
@@ -404,7 +422,7 @@ export function AdminDashboard() {
     const result = await performInsertOrUpdate({
       name: payload.name,
       description: payload.description,
-      categoryId: payload.categoryId,
+      category_id: payload.category_id,
       price: payload.price,
       stock: payload.stock,
       imageUrl: payload.imageUrl,
@@ -626,14 +644,14 @@ export function AdminDashboard() {
                     metricsLoading
                       ? "—"
                       : salesMetrics.netSalesMxn == null
-                        ? "Pendiente (costos/margen)"
+                        ? "—"
                         : `$${Number(salesMetrics.netSalesMxn).toLocaleString()} MXN`
                   }
                   icon={DollarSign}
                   description={
                     salesMetrics.netSalesMxn == null
-                      ? "Listo para calcular cuando agregues costos/margen"
-                      : "Ingresos - costos (si existe columna de costos)"
+                      ? "Valor no disponible desde RPC"
+                      : "Ingresos netos reportados por RPC"
                   }
                   variant="success"
                 />

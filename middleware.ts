@@ -24,6 +24,7 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith(`${ADMIN_DASHBOARD_PATH}/`) ||
     pathname === ADMIN_FALLBACK_PATH ||
     pathname.startsWith(`${ADMIN_FALLBACK_PATH}/`)
+  // Fast auth check: rely on session cookies instead of remote user validation.
   const { user, response } = await getSessionUser(request)
   const isAuthenticated = Boolean(user)
 

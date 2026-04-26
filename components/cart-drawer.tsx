@@ -5,8 +5,8 @@ import { Button } from "@/components/ui/button"
 import { Minus, Plus, Trash2, ShoppingBag, Sparkles } from "lucide-react"
 import { useCartStore } from "@/lib/cart-store"
 import { checkBundleEligibility } from "@/lib/store-data"
-import Link from "next/link"
 import { useMemo, useState } from "react"
+import { CheckoutModal } from "@/components/CheckoutModal"
 
 interface CartDrawerProps {
   open: boolean
@@ -17,6 +17,7 @@ export function CartDrawer({ open, onOpenChange }: CartDrawerProps) {
   const { items, removeItem, updateQuantity, getTotal, clearCart, addItem } = useCartStore()
   const bundleCheck = checkBundleEligibility(items)
   const [postalCode, setPostalCode] = useState("")
+  const [checkoutOpen, setCheckoutOpen] = useState(false)
 
   const shippingCost = useMemo(() => {
     if (postalCode.length !== 5) return null
@@ -172,11 +173,13 @@ export function CartDrawer({ open, onOpenChange }: CartDrawerProps) {
               <p className="mt-1 text-xs text-muted-foreground">
                 Envío gratis en pedidos mayores a $999 MXN
               </p>
-              <Link href="/confirmacion" onClick={() => onOpenChange(false)}>
-                <Button className="mt-4 w-full bg-primary text-primary-foreground hover:bg-primary/90 font-bold uppercase tracking-wide shadow-lg shadow-primary/30" size="lg">
-                  Proceder al pago
-                </Button>
-              </Link>
+              <Button
+                className="mt-4 w-full bg-primary text-primary-foreground hover:bg-primary/90 font-bold uppercase tracking-wide shadow-lg shadow-primary/30"
+                size="lg"
+                onClick={() => setCheckoutOpen(true)}
+              >
+                Pagar
+              </Button>
               <button
                 onClick={clearCart}
                 className="mt-2 w-full text-center text-sm text-muted-foreground transition-colors hover:text-foreground"
@@ -186,6 +189,7 @@ export function CartDrawer({ open, onOpenChange }: CartDrawerProps) {
             </div>
           </>
         )}
+        <CheckoutModal open={checkoutOpen} onOpenChange={setCheckoutOpen} />
       </SheetContent>
     </Sheet>
   )
