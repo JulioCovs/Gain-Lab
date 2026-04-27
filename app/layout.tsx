@@ -30,6 +30,12 @@ export const metadata: Metadata = {
       },
     ],
   },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Gain Lab | Suplementos Premium',
+    description: 'La mejor selección de suplementos para potenciar tu entrenamiento. Calidad de laboratorio para tus ganancias.',
+    images: ['/gainlab_logo.PNG'],
+  },
 }
 
 export const viewport: Viewport = {

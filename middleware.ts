@@ -11,7 +11,6 @@ export async function middleware(request: NextRequest) {
   // Excepciones extra (por seguridad) para evitar tocar rutas estáticas.
   if (
     pathname.startsWith("/_next") ||
-    pathname === "/favicon.ico" ||
     pathname === "/robots.txt" ||
     pathname === "/sitemap.xml"
   ) {
