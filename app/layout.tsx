@@ -15,8 +15,6 @@ export const metadata: Metadata = {
   keywords: ['suplementos', 'fitness', 'proteína', 'creatina', 'pre-entreno', 'ashwagandha', 'gain lab'],
   icons: {
     icon: '/gainlab_logo.PNG',
-    shortcut: '/gainlab_logo.PNG',
-    apple: '/gainlab_logo.PNG',
   },
   openGraph: {
     title: 'Gain Lab | Suplementos Premium',

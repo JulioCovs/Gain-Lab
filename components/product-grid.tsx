@@ -126,11 +126,10 @@ export function ProductGrid() {
       let { data, error: dbError } = await supabase
         .from("products")
         .select("*, categories(name)")
-        .gt("stock", 0)
 
       if (dbError) {
         // Fallback: if relation lookup fails, load products without category join.
-        const fallback = await supabase.from("products").select("*").gt("stock", 0)
+        const fallback = await supabase.from("products").select("*")
         data = fallback.data
         dbError = fallback.error
       }
@@ -184,7 +183,7 @@ export function ProductGrid() {
 
   const filteredProducts = products.filter((product) => {
     // Exclude bundles from regular grid
-    if (product.isBundle || product.stock <= 0) return false
+    if (product.isBundle) return false
 
     const matchesCategory = !selectedCategory || product.category === selectedCategory
     const matchesGoals =

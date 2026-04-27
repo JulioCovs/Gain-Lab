@@ -106,6 +106,27 @@ const initialProductForm: ProductFormState = {
 
 type AdminTab = "resumen" | "inventario" | "pedidos" | "clientes"
 
+const mapDbProductToAdminProduct = (item: unknown): AdminProduct => {
+  const row = (item as Record<string, unknown>) ?? {}
+  const rawCategoryId = row?.category_id ?? row?.categoryId ?? null
+  const rawName = row?.name ?? null
+  const rawPrice = row?.price ?? 0
+  const rawStock = row?.stock ?? 0
+  const rawDescription = row?.description ?? null
+  const rawImageUrl = row?.image_url ?? row?.imageUrl ?? null
+  const categoryId = rawCategoryId ? String(rawCategoryId) : null
+
+  return {
+    id: String(row?.id ?? ""),
+    name: String(rawName ?? ""),
+    description: rawDescription ? String(rawDescription) : null,
+    categoryId,
+    price: Number(rawPrice ?? 0),
+    stock: Number(rawStock ?? 0),
+    imageUrl: rawImageUrl ? String(rawImageUrl) : null,
+  }
+}
+
 export function AdminDashboard() {
   const [loading, setLoading] = useState(true)
   const [categoriesLoading, setCategoriesLoading] = useState(true)
@@ -232,27 +253,7 @@ export function AdminDashboard() {
         console.error("No se pudieron obtener productos:", errorMessage)
         setProducts([])
       } else {
-        const mappedProducts = ((productsUnwrapped as any).data ?? []).map((item: unknown) => {
-          const row = (item as Record<string, unknown>) ?? {}
-
-          const rawCategoryId = row?.category_id ?? row?.categoryId ?? null
-          const rawName = row?.name ?? null
-          const rawPrice = row?.price ?? 0
-          const rawStock = row?.stock ?? 0
-          const rawDescription = row?.description ?? null
-          const rawImageUrl = row?.image_url ?? row?.imageUrl ?? null
-          const categoryId = rawCategoryId ? String(rawCategoryId) : null
-
-          return {
-            id: String(row?.id ?? ""),
-            name: String(rawName ?? ""),
-            description: rawDescription ? String(rawDescription) : null,
-            categoryId,
-            price: Number(rawPrice ?? 0),
-            stock: Number(rawStock ?? 0),
-            imageUrl: rawImageUrl ? String(rawImageUrl) : null,
-          } as AdminProduct
-        })
+        const mappedProducts = ((productsUnwrapped as any).data ?? []).map(mapDbProductToAdminProduct)
         setProducts(mappedProducts)
       }
 
@@ -354,6 +355,40 @@ export function AdminDashboard() {
 
   useEffect(() => {
     loadDashboardData()
+  }, [])
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("admin-products-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "products" },
+        (payload) => {
+          if (payload.eventType === "DELETE") {
+            const deletedId = String((payload.old as Record<string, unknown> | null)?.id ?? "")
+            if (!deletedId) return
+            setProducts((prev) => prev.filter((product) => product.id !== deletedId))
+            return
+          }
+
+          const nextRow = mapDbProductToAdminProduct(payload.new)
+          if (!nextRow.id) return
+
+          setProducts((prev) => {
+            const existingIndex = prev.findIndex((product) => product.id === nextRow.id)
+            if (existingIndex === -1) return [nextRow, ...prev]
+
+            const updated = [...prev]
+            updated[existingIndex] = nextRow
+            return updated
+          })
+        }
+      )
+      .subscribe()
+
+    return () => {
+      void supabase.removeChannel(channel)
+    }
   }, [])
 
   const handleProductSubmit = async (e: FormEvent<HTMLFormElement>) => {
@@ -488,6 +523,13 @@ export function AdminDashboard() {
     if (status === "entregado") return "bg-emerald-100 text-emerald-700"
     if (status === "en-camino") return "bg-blue-100 text-blue-700"
     return "bg-yellow-100 text-yellow-800"
+  }
+
+  const getStockTextClass = (stock: number) => {
+    if (stock <= 5) return "text-red-600"
+    if (stock <= 9) return "text-amber-600"
+    if (stock <= 20) return "text-yellow-500"
+    return "text-emerald-600"
   }
 
   const filteredProducts = useMemo(() => products.filter((product) => !product.id.includes("bundle")), [products])
@@ -899,15 +941,16 @@ export function AdminDashboard() {
                           <TableCell className="text-right">
                             ${Number(product?.price ?? 0).toLocaleString()} MXN
                           </TableCell>
-                          <TableCell
-                            className={`text-right ${
-                              Number(product?.stock ?? 0) < LOW_STOCK_THRESHOLD ? "text-red-600" : ""
-                            }`}
-                          >
+                          <TableCell className="text-right">
                             <div className="ml-auto flex max-w-[150px] items-center justify-end gap-2">
+                              {Number(quickEditById[product.id]?.stock ?? product?.stock ?? 0) === 0 ? (
+                                <span className="text-xs font-bold uppercase tracking-wide text-red-600">AGOTADO</span>
+                              ) : null}
                               <Input
                                 type="number"
-                                className="h-8 w-20 text-right"
+                                className={`h-8 w-20 text-right font-semibold ${getStockTextClass(
+                                  Number(quickEditById[product.id]?.stock ?? product?.stock ?? 0)
+                                )}`}
                                 value={quickEditById[product.id]?.stock ?? String(Number(product?.stock ?? 0))}
                                 onChange={(e) => updateQuickEditDraft(product.id, { stock: e.target.value })}
                               />

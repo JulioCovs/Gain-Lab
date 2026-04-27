@@ -29,6 +29,7 @@ export function ProductCard({ product }: ProductCardProps) {
   const vipDiscountPercentage = useVipDiscountStore((s) => s.discountPercentage)
   const hasVipDiscount = vipDiscountPercentage > 0
   const vipPrice = hasVipDiscount ? applyPercentageDiscount(product.price, vipDiscountPercentage) : product.price
+  const isOutOfStock = product.stock <= 0
 
   useEffect(() => {
     let isMounted = true
@@ -102,6 +103,7 @@ export function ProductCard({ product }: ProductCardProps) {
   }, [isAdding])
 
   const handleAddToCart = () => {
+    if (isOutOfStock) return
     setIsAdding(true)
     addItem(product)
     window.setTimeout(() => {
@@ -267,8 +269,11 @@ export function ProductCard({ product }: ProductCardProps) {
             variant={isAdding || isInCart ? "secondary" : "default"}
             onClick={handleAddToCart}
             className="gap-2"
+            disabled={isOutOfStock}
           >
-            {isAdding ? (
+            {isOutOfStock ? (
+              "Agotado"
+            ) : isAdding ? (
               <>
                 <Check className="h-4 w-4" />
                 Agregado

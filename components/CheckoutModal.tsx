@@ -78,6 +78,50 @@ export function CheckoutModal({ open, onOpenChange }: CheckoutModalProps) {
       throw new Error("Debes iniciar sesion para confirmar tu pedido.")
     }
 
+    const productIds = Array.from(new Set(serializedItems.map((item) => item.product_id)))
+    const { data: stockRows, error: stockFetchError } = await supabase
+      .from("products")
+      .select("id, name, stock")
+      .in("id", productIds)
+
+    if (stockFetchError) {
+      throw new Error(`No se pudo validar inventario: ${stockFetchError.message}`)
+    }
+
+    const stockById = new Map(
+      (stockRows ?? []).map((row) => [String((row as Record<string, unknown>)?.id ?? ""), row as Record<string, unknown>])
+    )
+
+    for (const item of serializedItems) {
+      const row = stockById.get(item.product_id)
+      if (!row) {
+        throw new Error(`El producto "${item.name}" ya no está disponible.`)
+      }
+
+      const currentStock = Number(row.stock ?? 0)
+      if (!Number.isFinite(currentStock) || currentStock < item.quantity) {
+        throw new Error(`Stock insuficiente para "${item.name}". Disponible: ${Math.max(currentStock, 0)}.`)
+      }
+    }
+
+    for (const item of serializedItems) {
+      const row = stockById.get(item.product_id)
+      const currentStock = Number(row?.stock ?? 0)
+      const nextStock = currentStock - item.quantity
+
+      const { data: updatedRow, error: stockUpdateError } = await supabase
+        .from("products")
+        .update({ stock: nextStock })
+        .eq("id", item.product_id)
+        .gte("stock", item.quantity)
+        .select("id")
+        .maybeSingle()
+
+      if (stockUpdateError || !updatedRow) {
+        throw new Error(`No se pudo descontar inventario de "${item.name}". Intenta nuevamente.`)
+      }
+    }
+
     const payloadCandidates = [
       {
         user_id: user.id,
