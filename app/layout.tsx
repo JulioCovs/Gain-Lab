@@ -10,25 +10,27 @@ const inter = Inter({
 })
 
 export const metadata: Metadata = {
-  title: 'GAIN LAB | Suplementos Premium de Fitness',
-  description: 'Suplementos premium formulados para atletas que exigen lo mejor. Pre-entrenos, proteínas, creatinas y adaptógenos de élite.',
+  title: 'Gain Lab | Suplementos Premium',
+  description: 'La mejor selección de suplementos para potenciar tu entrenamiento. Calidad de laboratorio para tus ganancias.',
   keywords: ['suplementos', 'fitness', 'proteína', 'creatina', 'pre-entreno', 'ashwagandha', 'gain lab'],
   icons: {
-    icon: [
+    icon: '/gainlab_logo.PNG',
+    shortcut: '/gainlab_logo.PNG',
+    apple: '/gainlab_logo.PNG',
+  },
+  openGraph: {
+    title: 'Gain Lab | Suplementos Premium',
+    description: 'La mejor selección de suplementos para potenciar tu entrenamiento. Calidad de laboratorio para tus ganancias.',
+    type: 'website',
+    locale: 'es_MX',
+    images: [
       {
-        url: '/icon-light-32x32.png',
-        media: '(prefers-color-scheme: light)',
-      },
-      {
-        url: '/icon-dark-32x32.png',
-        media: '(prefers-color-scheme: dark)',
-      },
-      {
-        url: '/icon.svg',
-        type: 'image/svg+xml',
+        url: '/gainlab_logo.PNG',
+        width: 1024,
+        height: 1024,
+        alt: 'Gain Lab',
       },
     ],
-    apple: '/apple-icon.png',
   },
 }
 
