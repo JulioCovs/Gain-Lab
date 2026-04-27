@@ -10,15 +10,16 @@ const inter = Inter({
 })
 
 export const metadata: Metadata = {
-  title: 'Gain Lab | Suplementos Premium',
-  description: 'La mejor selección de suplementos para potenciar tu entrenamiento. Calidad de laboratorio para tus ganancias.',
+  metadataBase: new URL('https://gain-lab-cmbe.vercel.app'),
+  title: 'Gain Lab | Suplementos Premium y Nutrición Deportiva en México',
+  description: 'Potencia tus ganancias con la mejor selección de suplementos. Calidad de laboratorio, envíos rápidos y los mejores precios en proteína y creatina.',
   keywords: ['suplementos', 'fitness', 'proteína', 'creatina', 'pre-entreno', 'ashwagandha', 'gain lab'],
   icons: {
     icon: '/gainlab_logo.PNG',
   },
   openGraph: {
-    title: 'Gain Lab | Suplementos Premium',
-    description: 'La mejor selección de suplementos para potenciar tu entrenamiento. Calidad de laboratorio para tus ganancias.',
+    title: 'Gain Lab | Suplementos Premium y Nutrición Deportiva en México',
+    description: 'Potencia tus ganancias con la mejor selección de suplementos. Calidad de laboratorio, envíos rápidos y los mejores precios en proteína y creatina.',
     type: 'website',
     locale: 'es_MX',
     images: [
@@ -32,8 +33,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Gain Lab | Suplementos Premium',
-    description: 'La mejor selección de suplementos para potenciar tu entrenamiento. Calidad de laboratorio para tus ganancias.',
+    title: 'Gain Lab | Suplementos Premium y Nutrición Deportiva en México',
+    description: 'Potencia tus ganancias con la mejor selección de suplementos. Calidad de laboratorio, envíos rápidos y los mejores precios en proteína y creatina.',
     images: ['/gainlab_logo.PNG'],
   },
 }
